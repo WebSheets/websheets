@@ -420,12 +420,19 @@ WebSheet.prototype.forceRerender = function() {
     }
 
     // Bind event handlers
+    unlisten(this.elem, 'focus');
+    listen(this.elem, 'focus', this.onFocus.bind(this));
     unlisten(this.elem, 'blur');
     listen(this.elem, 'blur', this.onBlur.bind(this));
     unlisten(this.elem, 'keyup');
     listen(this.elem, 'keyup', this.onKeyup.bind(this));
 };
 
+WebSheet.prototype.onFocus = function(e) {
+    var row = e.target.getAttribute('data-row') | 0;
+    var col = e.target.getAttribute('data-col') | 0;
+    e.target.value = (this.data[row] || [])[col] || '';
+};
 WebSheet.prototype.onBlur = function(e) {
     var row = e.target.getAttribute('data-row') | 0;
     var col = e.target.getAttribute('data-col') | 0;
@@ -478,15 +485,20 @@ WebSheet.prototype.updateDependencies = function(cellID) {
 };
 
 WebSheet.prototype.setValueAtPosition = function(row, col, value) {
+    var cellID = getCellID(row, col);
+
     this.data[row] = this.data[row] || [];
-    if (this.data[row][col] === value) return;
+    if (this.data[row][col] === value) {
+        var elem = this.elem.querySelector('[data-id="' + cellID + '"]');
+        if (elem && this.calculated[row] && this.calculated[row][col]) elem.value = this.calculated[row][col];
+        return;
+    }
 
     this.data[row][col] = value;
     if (this.calculated[row]) {
         delete this.calculated[row][col];
     }
 
-    var cellID = getCellID(row, col);
     this.clearDependants(cellID);
 
     if (value[0] === '=') {
