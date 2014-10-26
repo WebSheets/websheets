@@ -22,7 +22,7 @@ var TOKEN_WS = /^\s+/;
 ///////////
 
 function factorial(n, modifier) {
-    return n < 2 ? return n : return n * factorial(n - (modifier || 1));
+    return n < 2 ? n : n * factorial(n - (modifier || 1));
 }
 
 function extend(base, extension) {
@@ -62,6 +62,11 @@ function unlisten(elem, event) {
     });
 }
 
+function parseNumMaybe(value) {
+    var parsed = parseFloat(value);
+    return window.isNaN(parsed) ? value : parsed;
+}
+
 ///////////
 // Expression Parser
 ///////////
@@ -82,7 +87,7 @@ ExpressionNode.prototype.run = function(sheet) {
         case 'number':
             return this.value;
         case 'identifier':
-            return sheet.getCalculatedValueAtID(this.value);
+            return parseNumMaybe(sheet.getCalculatedValueAtID(this.value)) || 0;
         case 'binop_mult':
             return this.left.run(sheet) * this.right.run(sheet);
         case 'binop_div':
@@ -332,6 +337,9 @@ WebSheet.prototype.forceRerender = function() {
             row.appendChild(cell);
             cell.value = rowCalculatedCache[j] || rowDataCache[j] || '';
             cell.setAttribute('data-id', cell.title = this.getCellID(i, j));
+            cell.setAttribute('data-id-prev-col', this.getCellID(i, j - 1));
+            cell.setAttribute('data-id-prev-row', this.getCellID(i - 1, j));
+            cell.setAttribute('data-id-next-col', this.getCellID(i, j + 1));
             cell.setAttribute('data-id-next-row', this.getCellID(i + 1, j));
             cell.setAttribute('data-row', i);
             cell.setAttribute('data-col', j);
@@ -359,10 +367,17 @@ WebSheet.prototype.onBlur = function(e) {
     this.setValueAtPosition(row, col, e.target.value);
 };
 WebSheet.prototype.onKeyup = function(e) {
-    if (e.keyCode === 13) {
-        var next = this.elem.querySelector('[data-id=' + e.target.getAttribute('data-id-next-row') + ']');
-        if (next) next.focus();
+    var next;
+    if (e.keyCode === 13 || e.keyCode === 40) {
+        next = this.elem.querySelector('[data-id=' + e.target.getAttribute('data-id-next-row') + ']');
+    } else if (e.keyCode === 37 && e.target.selectionStart === 0) {
+        next = this.elem.querySelector('[data-id=' + e.target.getAttribute('data-id-prev-col') + ']');
+    } else if (e.keyCode === 39 && e.target.selectionEnd === e.target.value.length) {
+        next = this.elem.querySelector('[data-id=' + e.target.getAttribute('data-id-next-col') + ']');
+    } else if (e.keyCode === 38) {
+        next = this.elem.querySelector('[data-id=' + e.target.getAttribute('data-id-prev-row') + ']');
     }
+    if (next) next.focus();
 };
 
 WebSheet.prototype.getCalculatedValueAtID = function(id) {
@@ -387,6 +402,10 @@ WebSheet.prototype.calculateValueAtPosition = function(row, col, expression) {
     var parsed = parse(expression);
     console.log(parsed);
     var value = parsed.run(this);
+    console.log(value);
+    this.calculated[row] = this.calculated[row] || [];
+    this.calculated[row][col] = value;
+    this.elem.querySelector('[data-id=' + this.getCellID(row, col) + ']').value = value;
 };
 
 WebSheet.prototype.getCellID = function(row, column) {
