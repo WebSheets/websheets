@@ -15,6 +15,7 @@ var TOKEN_BINOP_ADD = /^(\+|\-)/;
 var TOKEN_FOPEN = /^(\w+)\(/;
 var TOKEN_RPAREN = /^\)/;
 var TOKEN_COMMA = /^,/;
+var TOKEN_COLON = /^:/;
 var TOKEN_WS = /^\s+/;
 
 ///////////
@@ -81,6 +82,47 @@ function ExpressionNode(type, params) {
     extend(this, params);
 }
 
+ExpressionNode.prototype.walk = function(cb) {
+    cb(this);
+    switch (this.type) {
+        case 'boolean':
+        case 'number':
+        case 'identifier':
+            return;
+        case 'function':
+            this.args.forEach(function(arg) {
+                arg.walk(cb);
+            });
+            return;
+        case 'binop_mult':
+        case 'binop_div':
+        case 'binop_add':
+        case 'binop_sub':
+            this.left.walk(cb);
+            this.right.walk(cb);
+    }
+};
+
+ExpressionNode.prototype.findCellDependencies = function(cb) {
+    this.walk(function(node) {
+        if (node.type === 'identifier') {
+            cb(node.value);
+        } else if (node.type === 'range') {
+            var start = getCellPos(node.start.value);
+            var end = getCellPos(node.end.value);
+            var rowStart = Math.min(start.row, end.row);
+            var rowEnd = Math.max(start.row, end.row);
+            var colStart = Math.min(start.col, end.col);
+            var colEnd = Math.max(start.col, end.col);
+            for (var i = rowStart; i <= rowEnd; i++) {
+                for (var j = colStart; j <= colEnd; j++) {
+                    cb(getCellID(i, j));
+                }
+            }
+        }
+    });
+};
+
 ExpressionNode.prototype.run = function(sheet) {
     switch (this.type) {
         case 'boolean':
@@ -96,8 +138,13 @@ ExpressionNode.prototype.run = function(sheet) {
             return this.left.run(sheet) + this.right.run(sheet);
         case 'binop_sub':
             return this.left.run(sheet) - this.right.run(sheet);
+        case 'range':
+            return '[range]'; // FIXME: Return a proper matrix
+            // return this.start.run()
     }
     if (this.type !== 'function') throw new TypeError('Unknown exression node');
+
+    // FIXME: This doesn't account for ranges
     var args = this.args.map(function(arg) {
         return arg.run(sheet);
     });
@@ -167,7 +214,7 @@ function parse(expression) {
         } else if (matches = TOKEN_NUM.exec(remainder)) {
             output = new ExpressionToken('number', matches[0]);
         } else if (matches = TOKEN_CELL_ID.exec(remainder)) {
-            output = new ExpressionToken('ident', matches[0]);
+            output = new ExpressionToken('ident', matches[0].toUpperCase());
         } else if (matches = TOKEN_FOPEN.exec(remainder)) {
             output = new ExpressionToken('funcopen', matches[1]);
         } else if (matches = TOKEN_RPAREN.exec(remainder)) {
@@ -178,8 +225,10 @@ function parse(expression) {
             output = new ExpressionToken('binop_add', matches[0]);
         } else if (matches = TOKEN_COMMA.exec(remainder)) {
             output = new ExpressionToken('comma', ',');
+        } else if (matches = TOKEN_COLON.exec(remainder)) {
+            output = new ExpressionToken('colon', ':');
         } else {
-            throw new SyntaxError();
+            throw new SyntaxError('Unknown token: ' + remainder);
         }
         if (matches) {
             lexIdx += matches[0].length;
@@ -218,10 +267,22 @@ function parse(expression) {
         else
             throw new SyntaxError();
     }
+    function parseRange() {
+        var base = parsePrimitive();
+        if (!base || base.type !== 'identifier') return base;
+        if (accept('colon')) {
+            var end = assert('ident');
+            base = new ExpressionNode('range', {
+                start: base,
+                end: new ExpressionNode('identifier', {value: end.value})
+            });
+        }
+        return base;
+    }
     function parseFunc() {
         var funcName = accept('funcopen');
         if (!funcName) {
-            return parsePrimitive();
+            return parseRange();
         }
         var peeked = peek();
         var args = [];
@@ -293,6 +354,10 @@ function WebSheet(elem, params) {
     this.data = [];
     this.calculated = [];
     this.formatting = [];
+
+    this.depStack = [];
+    this.dependencies = new Map(); // Map of cell ID to array of dependant cell IDs
+    this.dependants = new Map(); // Map of cell ID to array of dependencies
 }
 
 WebSheet.prototype.forceRerender = function() {
@@ -336,11 +401,11 @@ WebSheet.prototype.forceRerender = function() {
             cell.style.width = this.columnWidths[j] + 'px';
             row.appendChild(cell);
             cell.value = rowCalculatedCache[j] || rowDataCache[j] || '';
-            cell.setAttribute('data-id', cell.title = this.getCellID(i, j));
-            cell.setAttribute('data-id-prev-col', this.getCellID(i, j - 1));
-            cell.setAttribute('data-id-prev-row', this.getCellID(i - 1, j));
-            cell.setAttribute('data-id-next-col', this.getCellID(i, j + 1));
-            cell.setAttribute('data-id-next-row', this.getCellID(i + 1, j));
+            cell.setAttribute('data-id', cell.title = getCellID(i, j));
+            cell.setAttribute('data-id-prev-col', getCellID(i, j - 1));
+            cell.setAttribute('data-id-prev-row', getCellID(i - 1, j));
+            cell.setAttribute('data-id-next-col', getCellID(i, j + 1));
+            cell.setAttribute('data-id-next-row', getCellID(i + 1, j));
             cell.setAttribute('data-row', i);
             cell.setAttribute('data-col', j);
 
@@ -369,72 +434,108 @@ WebSheet.prototype.onBlur = function(e) {
 WebSheet.prototype.onKeyup = function(e) {
     var next;
     if (e.keyCode === 13 || e.keyCode === 40) {
-        next = this.elem.querySelector('[data-id=' + e.target.getAttribute('data-id-next-row') + ']');
+        next = this.elem.querySelector('[data-id="' + e.target.getAttribute('data-id-next-row') + '"]');
     } else if (e.keyCode === 37 && e.target.selectionStart === 0) {
-        next = this.elem.querySelector('[data-id=' + e.target.getAttribute('data-id-prev-col') + ']');
+        next = this.elem.querySelector('[data-id="' + e.target.getAttribute('data-id-prev-col') + '"]');
     } else if (e.keyCode === 39 && e.target.selectionEnd === e.target.value.length) {
-        next = this.elem.querySelector('[data-id=' + e.target.getAttribute('data-id-next-col') + ']');
+        next = this.elem.querySelector('[data-id="' + e.target.getAttribute('data-id-next-col') + '"]');
     } else if (e.keyCode === 38) {
-        next = this.elem.querySelector('[data-id=' + e.target.getAttribute('data-id-prev-row') + ']');
+        next = this.elem.querySelector('[data-id="' + e.target.getAttribute('data-id-prev-row') + '"]');
     }
     if (next) next.focus();
 };
 
+WebSheet.prototype.clearDependants = function(id) {
+    var deps = this.dependants.get(id);
+    if (!deps) return;
+    var remDeps;
+    var idx;
+    for (var i = 0; i < deps.length; i++) {
+        remDeps = this.dependencies.get(deps[i]);
+        if (!remDeps) continue;
+        idx = remDeps.indexOf(id);
+        if (idx !== -1) remDeps.splice(idx, 1);
+    }
+};
+
 WebSheet.prototype.getCalculatedValueAtID = function(id) {
-    var pos = this.getCellPos(id);
+    var pos = getCellPos(id);
     return (this.calculated[pos.row] || [])[pos.col] || (this.data[pos.row] || [])[pos.col];
+};
+
+WebSheet.prototype.updateDependencies = function(cellID) {
+    if (this.depStack.indexOf(cellID) !== -1) return;
+    this.depStack.push(cellID);
+    var deps = this.dependencies.get(cellID);
+    if (deps) {
+        var dep;
+        for (var i = 0; i < deps.length; i++) {
+            dep = getCellPos(deps[i]);
+            this.calculateValueAtPosition(dep.row, dep.col, this.data[dep.row][dep.col].substr(1));
+        }
+    }
+    this.depStack.pop();
 };
 
 WebSheet.prototype.setValueAtPosition = function(row, col, value) {
     this.data[row] = this.data[row] || [];
+    if (this.data[row][col] === value) return;
+
     this.data[row][col] = value;
     if (this.calculated[row]) {
         delete this.calculated[row][col];
     }
 
+    var cellID = getCellID(row, col);
+    this.clearDependants(cellID);
+
     if (value[0] === '=') {
         this.calculateValueAtPosition(row, col, value.substr(1));
+    } else {
+        this.updateDependencies(cellID);
     }
 };
 
 WebSheet.prototype.calculateValueAtPosition = function(row, col, expression) {
-    if (!expression) return;
+    if (!expression) return
+    var cellID = getCellID(row, col);
+
+    // Parse the expression
     var parsed = parse(expression);
     console.log(parsed);
-    var value = parsed.run(this);
+
+    // Evaluate the expression to find a value
+    var value;
+    try {
+        value = parsed.run(this);
+    } catch (e) {
+        console.error(e);
+        value = '#ERROR';
+    }
     console.log(value);
+
+    // Set the calculated value in the calculated cache
     this.calculated[row] = this.calculated[row] || [];
     this.calculated[row][col] = value;
-    this.elem.querySelector('[data-id=' + this.getCellID(row, col) + ']').value = value;
-};
 
-WebSheet.prototype.getCellID = function(row, column) {
-    var base = '';
-    var character;
+    // Set the dependants
+    var dependants = [];
+    parsed.findCellDependencies(function(dep) {
+        if (dependants.indexOf(dep) !== -1) return;
+        dependants.push(dep);
+        var deps;
+        if (!this.dependencies.has(dep)) {
+            this.dependencies.set(dep, [cellID]);
+        } else if ((deps = this.dependencies.get(dep)) && deps.indexOf(cellID) === -1) {
+            deps.push(cellID);
+        }
+    }.bind(this));
+    this.dependants.set(cellID, dependants);
 
-    row += 1;
+    // Set the value of the element
+    this.elem.querySelector('[data-id=' + cellID + ']').value = value;
 
-    do {
-        character = column % 26;
-        column -= character;
-        column /= 26;
-        base = String.fromCharCode(character + 65) + base;
-    } while (column);
-    return base + row;
-};
-
-WebSheet.prototype.getCellPos = function(id) {
-    var matches = /(\w+)(\d)+/.exec(id);
-    var charBit = matches[1];
-    var character;
-    var col = 0;
-    while (charBit) {
-        character = charBit.charCodeAt(0) - 65;
-        col *= 26;
-        col += character;
-        charBit = charBit.substr(1);
-    }
-    return {col: col, row: matches[2] - 1};
+    this.updateDependencies(cellID);
 };
 
 WebSheet.prototype.addColumn = function() {
@@ -450,6 +551,39 @@ WebSheet.prototype.addRow = function() {
     this.calculated.push(new Array(this.width));
     this.forceRerender();
 };
+
+function getCellID(row, column) {
+    var base = '';
+    var character;
+
+    row += 1;
+
+    do {
+        character = column % 26;
+        column -= character;
+        column /= 26;
+        base = String.fromCharCode(character + 65) + base;
+    } while (column);
+    return base + row;
+}
+
+var cellPosCache = new Map();
+function getCellPos(id) {
+    if (cellPosCache.has(id)) return cellPosCache.get(id);
+    var matches = /(\w+)(\d)+/.exec(id);
+    var charBit = matches[1];
+    var character;
+    var col = 0;
+    while (charBit) {
+        character = charBit.charCodeAt(0) - 65;
+        col *= 26;
+        col += character;
+        charBit = charBit.substr(1);
+    }
+    var output = {col: col, row: matches[2] - 1};
+    cellPosCache.set(id, output);
+    return output;
+}
 
 
 if (window.define) {
