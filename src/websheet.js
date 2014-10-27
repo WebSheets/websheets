@@ -66,12 +66,12 @@ function listen(elem, event, cb) {
     elem.listeners[event] = elem.listeners[event] || [];
     elem.listeners[event].push(cb);
 
-    elem.addEventListener(event, cb, true);
+    elem.addEventListener(event, cb, elem !== window);
 }
 function unlisten(elem, event) {
     if (!elem.listeners || !elem.listeners[event]) return;
     elem.listeners[event].forEach(function(listener) {
-        elem.removeEventListener(event, listener, true);
+        elem.removeEventListener(event, listener, elem !== window);
     });
 }
 
@@ -459,6 +459,9 @@ function parse(expression) {
 // Sheets
 ///////////
 
+var DRAG_NONE = 0;
+var DRAG_MOVE = 1;
+
 var defaultParams = {
     width: 5,
     height: 20,
@@ -466,6 +469,7 @@ var defaultParams = {
 
 function WebSheet(elem, params) {
     this.elem = elem;
+    this.elem.className = 'websheet';
 
     params = defaults(params || {}, defaultParams);
     extend(this, params);
@@ -482,12 +486,25 @@ function WebSheet(elem, params) {
     this.depStack = [];
     this.dependencies = new Map(); // Map of cell ID to array of dependant cell IDs
     this.dependants = new Map(); // Map of cell ID to array of dependencies
+
+    this.dragType = DRAG_NONE;
+    this.dragSource = null;
+
+    var me = this;
+    listen(window, 'mouseup', this._windowMouseup = function(e) {
+        if (me.dragType !== DRAG_NONE) {
+            me.dragType = DRAG_NONE;
+            me.dragSource = null;
+            me.elem.className = 'websheet';
+        }
+    });
 }
 
 WebSheet.prototype.forceRerender = function() {
     // First, update the element to be the correct dimensions.
     var width = sum(this.columnWidths); // Get the width of each column
-    width -= (this.width) * DEFAULT_BORDER_WIDTH; // Account for border widths
+    width += DEFAULT_BORDER_WIDTH;
+    // width -= this.width * DEFAULT_BORDER_WIDTH; // Account for border widths
     this.elem.style.width = width + 'px';
 
     while (this.elem.childNodes.length) {
@@ -502,6 +519,7 @@ WebSheet.prototype.forceRerender = function() {
     var rowCalculatedCache;
     var rowFormattingCache;
     var cell;
+    var cellWrapper;
     var cellFormatting;
     var cellFormattingStyle;
     for (var i = 0; i < this.height; i++) {
@@ -520,8 +538,14 @@ WebSheet.prototype.forceRerender = function() {
         for (var j = 0; j < this.width; j++) {
             cell = document.createElement('input');
             cell.className = 'websheet-cell';
-            cell.style.width = this.columnWidths[j] + 'px';
-            row.appendChild(cell);
+
+            cellWrapper = document.createElement('div');
+            cellWrapper.className = 'websheet-cell-wrapper';
+            cellWrapper.style.width = (this.columnWidths[j] - 1) + 'px';
+            cellWrapper.appendChild(cell);
+
+            row.appendChild(cellWrapper);
+
             cell.value = rowCalculatedCache[j] || rowDataCache[j] || '';
             cell.setAttribute('data-id', cell.title = getCellID(i, j));
             cell.setAttribute('data-id-prev-col', getCellID(i, j - 1));
@@ -557,6 +581,11 @@ WebSheet.prototype.forceRerender = function() {
     unlisten(this.elem, 'keydown');
     listen(this.elem, 'keydown', this.onKeydown.bind(this));
 
+    unlisten(this.elem, 'mousedown');
+    listen(this.elem, 'mousedown', this.onMousedown.bind(this));
+    unlisten(this.elem, 'mouseup');
+    listen(this.elem, 'mouseup', this.onMouseup.bind(this));
+
     workQueue.forEach(function(x) {x();});
 };
 
@@ -565,11 +594,13 @@ WebSheet.prototype.onFocus = function(e) {
     var col = e.target.getAttribute('data-col') | 0;
     e.target.value = (this.data[row] || [])[col] || '';
     e.target.select(0, e.target.value.length);
+    e.target.parentNode.className = 'websheet-cell-wrapper websheet-has-focus';
 };
 WebSheet.prototype.onBlur = function(e) {
     var row = e.target.getAttribute('data-row') | 0;
     var col = e.target.getAttribute('data-col') | 0;
     this.setValueAtPosition(row, col, e.target.value);
+    e.target.parentNode.className = 'websheet-cell-wrapper';
 };
 WebSheet.prototype.onKeydown = function(e) {
     var next;
@@ -591,6 +622,37 @@ WebSheet.prototype.onKeyup = function(e) {
         next = this.elem.querySelector('[data-id="' + e.target.getAttribute('data-id-prev-row') + '"]');
     }
     if (next) next.focus();
+};
+WebSheet.prototype.onMousedown = function(e) {
+    var target = e.target;
+    var id;
+    var pos;
+    if (target.className.indexOf('websheet-has-focus') !== -1) {
+        e.preventDefault();
+        this.dragType = DRAG_MOVE;
+        this.elem.className += ' websheet-grabbing';
+        id = this.dragSource = target.firstChild.getAttribute('data-id');
+        pos = getCellPos(id);
+        this.setValueAtPosition(pos.row, pos.col, target.firstChild.value);
+    } else {
+        //
+    }
+};
+WebSheet.prototype.onMouseup = function(e) {
+    var target = e.target;
+    var pos;
+    var pos2;
+    if (this.dragType === DRAG_MOVE && target.className.indexOf('websheet-cell') !== -1) {
+        // debugger;
+        pos = getCellPos(this.dragSource);
+        pos2 = getCellPos(target.getAttribute('data-id'));
+        this.setValueAtPosition(pos2.row, pos2.col, this.getValueAtPos(pos.row, pos.col) || '');
+        this.clearCell(pos.row, pos.col);
+        e.target.focus();
+    }
+    this.elem.className = 'websheet';
+    this.dragType = 0;
+    this.dragSource = null;
 };
 
 WebSheet.prototype.clearDependants = function(id) {
@@ -629,12 +691,16 @@ WebSheet.prototype.updateDependencies = function(cellID) {
     this.depStack.pop();
 };
 
+WebSheet.prototype.getValueAtPos = function(row, col) {
+    return (this.data[row] || [])[col] || null;
+};
+
 WebSheet.prototype.setValueAtPosition = function(row, col, value, force) {
     var cellID = getCellID(row, col);
+    var elem = this.elem.querySelector('[data-id="' + cellID + '"]');
 
     this.data[row] = this.data[row] || [];
     if (this.data[row][col] === value && !force) {
-        var elem = this.elem.querySelector('[data-id="' + cellID + '"]');
         if (elem && this.calculated[row] && this.calculated[row][col]) elem.value = this.calculated[row][col];
         return;
     }
@@ -650,6 +716,7 @@ WebSheet.prototype.setValueAtPosition = function(row, col, value, force) {
         this.calculateValueAtPosition(row, col, value.substr(1));
     } else {
         this.updateDependencies(cellID);
+        if (elem) elem.value = value;
     }
 };
 

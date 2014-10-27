@@ -1,3 +1,8 @@
+.websheet.websheet-grabbing {
+    cursor: -webkit-grabbing;
+    cursor: grabbing;
+}
+
 .websheet-row {
     display: block;
     padding-right: 1px;
@@ -9,30 +14,50 @@
     z-index: 2;
 }
 
-.websheet-cell {
-    -moz-appearance: none;
-    -webkit-appearance: none;
+.websheet-cell-wrapper {
     border: 1px solid #000;
-    border-radius: 1px;
-    box-shadow: 0 0 0 0 rgba(51, 153, 255, 0.85);
     display: inline-block;
-    font-size: 13px;
-    height: 2em;
     margin-bottom: -1px;
     margin-right: -1px;
     position: relative;
-    transition: box-shadow 0.15s, z-index 0.15s;
     z-index: 1;
 }
-.websheet-cell:focus {
-    /*border-color: transparent;*/
-    box-shadow: 0 0 0 7px rgba(51, 153, 255, 0.85);
-    outline: none;
+.websheet-cell-wrapper.websheet-has-focus {
+    border: 0;
+    cursor: -webkit-grab;
+    cursor: grab;
+    margin: -4px -4px -4px -3px !important; /*sorry*/
+    padding: 4px;
     z-index: 2;
 }
-.websheet-cell:last-child {
-    border-right-width: 1px;
+.websheet-cell-wrapper:last-child {
+    margin-right: 0;
 }
-.websheet-row:last-child .websheet-cell {
-    border-bottom-width: 1px;
+.websheet-row:last-child .websheet-cell-wrapper {
+    margin-bottom: 0;
+}
+
+.websheet-cell {
+    -moz-appearance: none;
+    -webkit-appearance: none;
+    background: transparent;
+    border: 0;
+    border-radius: 1px;
+    box-shadow: 0 0 0 0 rgba(51, 153, 255, 0.85);
+    display: block;
+    font-size: 13px;
+    height: 2em;
+    transition: box-shadow 0.15s, z-index 0.15s;
+    width: 100%;
+}
+.websheet-cell:focus {
+    border: 1px solid rgb(51, 153, 255);
+    box-shadow: 0 0 0 7px rgba(51, 153, 255, 0.85);
+    outline: none;
+}
+
+.websheet-grabbing .websheet-cell-wrapper:hover {
+    border-color: white;
+    border-style: dashed;
+    z-index: 2;
 }
