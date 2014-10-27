@@ -475,8 +475,6 @@ function WebSheet(elem, params) {
         this.columnWidths[i] = DEFAULT_COLUMN_WIDTH;
     }
 
-    this.rowElemCache = [];
-
     this.data = [];
     this.calculated = [];
     this.formatting = [];
@@ -496,8 +494,7 @@ WebSheet.prototype.forceRerender = function() {
         this.elem.removeChild(this.elem.firstChild);
     }
 
-    // Clear internal node caches.
-    this.rowElemCache = [];
+    var workQueue = [];
 
     // Create each row and cell
     var row;
@@ -514,7 +511,6 @@ WebSheet.prototype.forceRerender = function() {
         if (i < 1) {
             row.className += ' websheet-row-sticky';
         }
-        this.rowElemCache.push(row);
         this.elem.appendChild(row);
 
         rowDataCache = this.data[i] || [];
@@ -535,6 +531,12 @@ WebSheet.prototype.forceRerender = function() {
             cell.setAttribute('data-row', i);
             cell.setAttribute('data-col', j);
 
+            if (cell.value[0] === '=') {
+                workQueue.push(function(cell, i, j) {
+                    this.setValueAtPosition(i, j, cell.value, true);
+                }.bind(this, cell, i, j));
+            }
+
             cellFormatting = rowFormattingCache[j];
             if (!cellFormatting) continue;
             for (cellFormattingStyle in cellFormatting) {
@@ -554,6 +556,8 @@ WebSheet.prototype.forceRerender = function() {
     listen(this.elem, 'keyup', this.onKeyup.bind(this));
     unlisten(this.elem, 'keydown');
     listen(this.elem, 'keydown', this.onKeydown.bind(this));
+
+    workQueue.forEach(function(x) {x();});
 };
 
 WebSheet.prototype.onFocus = function(e) {
@@ -625,11 +629,11 @@ WebSheet.prototype.updateDependencies = function(cellID) {
     this.depStack.pop();
 };
 
-WebSheet.prototype.setValueAtPosition = function(row, col, value) {
+WebSheet.prototype.setValueAtPosition = function(row, col, value, force) {
     var cellID = getCellID(row, col);
 
     this.data[row] = this.data[row] || [];
-    if (this.data[row][col] === value) {
+    if (this.data[row][col] === value && !force) {
         var elem = this.elem.querySelector('[data-id="' + cellID + '"]');
         if (elem && this.calculated[row] && this.calculated[row][col]) elem.value = this.calculated[row][col];
         return;
@@ -714,6 +718,19 @@ WebSheet.prototype.addRow = function() {
     this.data.push(new Array(this.width));
     this.formatting.push(new Array(this.width));
     this.calculated.push(new Array(this.width));
+    this.forceRerender();
+};
+
+WebSheet.prototype.loadData = function(data) {
+    while (this.height < data.length) this.addRow();
+    while (this.width < data[0].length) this.addColumn();
+
+    for (var i = 0; i < data.length; i++) {
+        this.data[i] = this.data[i] || [];
+        for (var j = 0; j < data[i].length; j++) {
+            this.data[i][j] = data[i][j];
+        }
+    }
     this.forceRerender();
 };
 
