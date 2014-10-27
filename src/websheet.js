@@ -235,6 +235,7 @@ ExpressionNode.prototype.run = function(sheet) {
         case 'floor': return Math.floor(args[0]);
         case 'frequency': return args.slice(0, -1).filter(function(x) {return x <= args[args.length - 1];}).length;
         case 'if': return args[0] ? args[1] : args[2];
+        case 'isblank': return args[0] === '' || args[0] === null;
         case 'iseven': return args[0] % 2 === 0;
         case 'isnottext': return typeof args[0] !== 'string';
         case 'isnumber': return typeof args[0] === 'number';
@@ -460,7 +461,7 @@ function parse(expression) {
 
 var defaultParams = {
     width: 5,
-    height: 500,
+    height: 20,
 };
 
 function WebSheet(elem, params) {
@@ -688,6 +689,18 @@ WebSheet.prototype.calculateValueAtPosition = function(row, col, expression) {
     this.elem.querySelector('[data-id=' + cellID + ']').value = value;
 
     this.updateDependencies(cellID);
+};
+
+WebSheet.prototype.clearCell = function(row, col) {
+    var cellID = getCellID(row, col);
+    var elem = this.elem.querySelector('[data-id="' + cellID + '"]');
+    if (!elem) return;
+
+    elem.value = '';
+    if (row in this.data) delete this.data[row][col];
+    if (row in this.calculated) delete this.calculated[row][col];
+    this.clearDependants(cellID);
+    this.dependants.set(cellID, []);
 };
 
 WebSheet.prototype.addColumn = function() {
