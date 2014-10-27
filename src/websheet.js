@@ -11,7 +11,7 @@ var TOKEN_BOOL = /^(true|false)/i;
 var TOKEN_CELL_ID = /^\w+\d+/i;
 var TOKEN_NUM = /^(([1-9][0-9]*\.[0-9]+)|([1-9][0-9]*))/;
 var TOKEN_BINOP_TIMES = /^(\/|\*)/;
-var TOKEN_BINOP_ADD = /^(\+|\-)/;
+var TOKEN_BINOP_ADD = /^(\+|\-|&)/;
 var TOKEN_FOPEN = /^(\w+)\(/;
 var TOKEN_RPAREN = /^\)/;
 var TOKEN_COMMA = /^,/;
@@ -21,6 +21,10 @@ var TOKEN_WS = /^\s+/;
 ///////////
 // Utils
 ///////////
+
+function ident(x) {
+    return x;
+}
 
 function factorial(n, modifier) {
     return n < 2 ? n : n * factorial(n - (modifier || 1));
@@ -43,10 +47,18 @@ function defaults(base, def) {
     return base;
 }
 
+function add(a, b) {
+    return a + b;
+}
+
 function sum(elems) {
     return elems.reduce(function(a, b) {
         return a + b;
     }, 0);
+}
+
+function commas(num) {
+    return num.toString().split(/(?=(?:\d\d\d)*$)/).join(',');
 }
 
 function listen(elem, event, cb) {
@@ -63,9 +75,22 @@ function unlisten(elem, event) {
     });
 }
 
+function isNaNAsFloat(value) {
+    return window.isNaN(parseFloat(value));
+}
+
+function isNotNaNAsFloat(value) {
+    return !window.isNaN(parseFloat(value));
+}
+
 function parseNumMaybe(value) {
     var parsed = parseFloat(value);
     return window.isNaN(parsed) ? value : parsed;
+}
+
+function parseNumAlways(value) {
+    var parsed = parseFloat(value);
+    return window.isNaN(parsed) ? (value ? 1 : 0) : parsed;
 }
 
 ///////////
@@ -98,27 +123,34 @@ ExpressionNode.prototype.walk = function(cb) {
         case 'binop_div':
         case 'binop_add':
         case 'binop_sub':
+        case 'binop_concat':
             this.left.walk(cb);
             this.right.walk(cb);
     }
 };
+
+function iterateRangeNode(node, cb) {
+    var start = getCellPos(node.start.value);
+    var end = getCellPos(node.end.value);
+    var rowStart = Math.min(start.row, end.row);
+    var rowEnd = Math.max(start.row, end.row);
+    var colStart = Math.min(start.col, end.col);
+    var colEnd = Math.max(start.col, end.col);
+    for (var i = rowStart; i <= rowEnd; i++) {
+        for (var j = colStart; j <= colEnd; j++) {
+            cb(i, j);
+        }
+    }
+}
 
 ExpressionNode.prototype.findCellDependencies = function(cb) {
     this.walk(function(node) {
         if (node.type === 'identifier') {
             cb(node.value);
         } else if (node.type === 'range') {
-            var start = getCellPos(node.start.value);
-            var end = getCellPos(node.end.value);
-            var rowStart = Math.min(start.row, end.row);
-            var rowEnd = Math.max(start.row, end.row);
-            var colStart = Math.min(start.col, end.col);
-            var colEnd = Math.max(start.col, end.col);
-            for (var i = rowStart; i <= rowEnd; i++) {
-                for (var j = colStart; j <= colEnd; j++) {
-                    cb(getCellID(i, j));
-                }
-            }
+            iterateRangeNode(node, function(row, col) {
+                cb(getCellID(row, col));
+            });
         }
     });
 };
@@ -138,64 +170,154 @@ ExpressionNode.prototype.run = function(sheet) {
             return this.left.run(sheet) + this.right.run(sheet);
         case 'binop_sub':
             return this.left.run(sheet) - this.right.run(sheet);
+        case 'binop_concat':
+            return this.left.run(sheet).toString() + this.right.run(sheet).toString();
         case 'range':
-            return '[range]'; // FIXME: Return a proper matrix
-            // return this.start.run()
+            var rangeCells = [];
+            iterateRangeNode(this, function(row, col) {
+                rangeCells.push(parseNumMaybe(sheet.getCalculatedValueAtPos(row, col)));
+            });
+            return rangeCells;
     }
     if (this.type !== 'function') throw new TypeError('Unknown exression node');
 
-    // FIXME: This doesn't account for ranges
-    var args = this.args.map(function(arg) {
-        return arg.run(sheet);
-    });
+    var args = [];
+    var argTmp;
+    for (var argI = 0; argI < this.args.length; argI++) {
+        argTmp = this.args[argI].run(sheet);
+        if (argTmp && typeof argTmp === 'object') {
+            args = args.concat(argTmp);
+        } else {
+            args.push(argTmp);
+        }
+    }
+    var tmp;
+    var tmp2;
     switch (this.name.toLowerCase()) {
-        case 'sin': return Math.sin(args[0]);
-        case 'cos': return Math.cos(args[0]);
-        case 'tan': return Math.tan(args[0]);
-        case 'int':
-        case 'floor': return Math.floor(args[0]);
-        case 'ceiling':
-        case 'ceil': return Math.ceil(args[0]);
-        case 'iseven': return args[0] % 2 === 0;
-        case 'isodd': return args[0] % 2 !== 0;
-        case 'istext': return typeof args[0] === 'string';
-        case 'isnottext': return typeof args[0] !== 'string';
-        case 'isnumber': return typeof args[0] === 'number';
-        case 'and': return args.reduce(function(a, b) {return a && b;});
-        case 'or': return args.reduce(function(a, b) {return a || b;});
-        case 'if': return args[0] ? args[1] : args[2];
-        case 'not': return !args[0];
         case 'abs': return Math.abs(args[0]);
         case 'acos': return Math.acos(args[0]);
         case 'acosh': return Math.acosh(args[0]);
+        case 'and': return args.reduce(function(a, b) {return a && b;});
+        case 'average':
+            tmp = args.filter(isNotNaNAsFloat);
+            return tmp.length ? tmp.reduce(add) / tmp.length : 0;
+        case 'averagea':
+            return args.map(parseNumAlways).reduce(add) / args.length;
+        case 'code':
+        case 'asc': return args[0].toString().charCodeAt(0) || 0;
         case 'asin': return Math.asin(args[0]);
         case 'asinh': return Math.asinh(args[0]);
         case 'atan': return Math.atan(args[0]);
-        case 'atanh': return Math.atanh(args[0]);
         case 'atan2': return Math.atan2(args[0]);
+        case 'atanh': return Math.atanh(args[0]);
+        case 'ceil':
+        case 'ceiling': return Math.ceil(args[0]);
+        case 'chr':
+        case 'char': return String.fromCharCode(args[0]);
         case 'combin': return factorial(args[0]) / factorial(args[0] - args[1]);
+        case 'concatenate': return args.reduce(function(a, b) {return a.toString() + b.toString();});
+        case 'cos': return Math.cos(args[0]);
+        case 'count': return args.filter(isNotNaNAsFloat).length;
+        case 'counta': return args.filter(function(x) {return x !== '' && x !== null && x !== undefined;}).length;
+        case 'countblank': return args.filter(function(x) {return x === '';}).length;
+        case 'countif': return args.filter(function(x) {return x == args[1];}).length;
         case 'degrees': return args[0] * 57.2957795;
+        case 'dollar': return '$' + commas(args[0] | 0) + (args[1] ? '.' + parseFloat(args[0]).toFixed(args[1]).split('.')[1] : '');
         case 'even': return Math.ceil(args[0] / 2) * 2;
+        case 'exact': return args[0].toString() === args[1].toString();
         case 'exp': return Math.exp(args[0], args[1]);
         case 'fact': return factorial(args[0]);
         case 'factdouble': return factorial(args[0], 2);
+        case 'search':
+        case 'find': return args[1].toString().substr((args[2] || 1) - 1).indexOf(args[0].toString());
+        case 'fixed': return (args[2] ? ident : commas)(args[0]) + (args[1] ? '.' + parseFloat(args[0]).toFixed(args[1]).split('.')[1] : '');
+        case 'int':
+        case 'floor': return Math.floor(args[0]);
+        case 'frequency': return args.slice(0, -1).filter(function(x) {return x <= args[args.length - 1];}).length;
+        case 'if': return args[0] ? args[1] : args[2];
+        case 'iseven': return args[0] % 2 === 0;
+        case 'isnottext': return typeof args[0] !== 'string';
+        case 'isnumber': return typeof args[0] === 'number';
+        case 'isodd': return args[0] % 2 !== 0;
+        case 'istext': return typeof args[0] === 'string';
+        case 'large': return args.slice(0, -1).sort().reverse()[args[args.length - 1]];
+        case 'lower':
+        case 'lcase': return args[0].toString().toLowerCase();
+        case 'left': return args[0].toString().substr(0, args[1] || 1);
+        case 'len': return args[0].toString().length;
         case 'ln': return Math.log(args[0]);
         case 'log10': return Math.log10(args[0]);
+        case 'max': return Math.max.apply(Math, args.filter(isNotNaNAsFloat));
+        case 'maxa': return Math.max.apply(Math, args.map(parseNumAlways));
+        case 'median':
+            tmp = args.map(parseFloat).sort();
+            return tmp.length % 2 === 0 ? (tmp[(tmp.length - 1) / 2 | 0] + tmp[Math.ceil((tmp.length - 1) / 2)]) / 2 : tmp[(tmp.length - 1) / 2];
+        case 'mid': return args[0].toString().substr((args[1] || 1) - 1, args[2]);
+        case 'min': return Math.min.apply(Math, args.filter(isNotNaNAsFloat));
+        case 'mina': return Math.min.apply(Math, args.map(parseNumAlways));
         case 'mod': return args[0] % args[1];
+        case 'not': return !args[0];
+        case 'or': return args.reduce(function(a, b) {return a || b;});
         case 'pi': return Math.PI;
         case 'power': return Math.pow(args[0], args[1]);
         case 'product': return args.reduce(function(a, b) {return a * b;});
+        case 'proper': return args[0].toString().split(/\s/).map(function(s) {return s[0].toUpperCase() + s.substr(1);});
         case 'quotient': return args[0] / args[1] | 0;
         case 'radians': return args[0] / 57.2957795;
         case 'rand': return Math.random();
         case 'randbetween': return Math.random() * (args[1] - args[0]) + args[0];
-        case 'round': return Math.round(args[0] * Math.pow(10, args[1])) / Math.pow(10, args[1]);
+        case 'replace': return args[0].toString().substr(0, args[1] - 1) + args[3].toString() + args[0].toString().substr(args[1] - 1 + args[2]);
+        case 'rept': return (new Array(args[1] + 1)).join(args[0].toString());
+        case 'right': return args[0].toString().substr(-1 * args[1] || -1);
+        case 'round': return Math.round(args[0] || 0).toFixed(args[1] || 0);
+        case 'fix':
         case 'rounddown': return args[0] < 0 ? Math.ceil(args[0]) : Math.floor(args[0]);
         case 'roundup': return args[0] > 0 ? Math.ceil(args[0]) : Math.floor(args[0]);
         case 'sign': return args[0] / Math.abs(args[0]) || 0;
+        case 'sin': return Math.sin(args[0]);
+        case 'space': return (new Array(args[0] + 1)).join(' ');
         case 'sqrt': return Math.sqrt(args[0]);
         case 'sqrtpi': return Math.sqrt(args[0] * Math.PI);
-        case 'sum': return args.reduce(function(a, b) {return a + b;});
+        case 'stdev':
+            tmp = args.filter(isNotNaNAsFloat).map(parseNumAlways);
+            tmp2 = tmp.reduce(add) / tmp.length;
+            return Math.sqrt(tmp.map(function(x) {return Math.pow(x - tmp2, 2);}).reduce(add) / (tmp.length - 1));
+        case 'stdeva':
+            tmp = args.map(parseNumAlways);
+            tmp2 = tmp.reduce(add) / tmp.length;
+            return Math.sqrt(tmp.map(function(x) {return Math.pow(x - tmp2, 2);}).reduce(add) / (tmp.length - 1));
+        case 'stdevp':
+            tmp = args.filter(isNotNaNAsFloat).map(parseNumAlways);
+            tmp2 = tmp.reduce(add) / tmp.length;
+            return Math.sqrt(tmp.map(function(x) {return Math.pow(x - tmp2, 2);}).reduce(add) / tmp.length);
+        case 'stdevpa':
+            tmp = args.map(parseNumAlways);
+            tmp2 = tmp.reduce(add) / tmp.length;
+            return Math.sqrt(tmp.map(function(x) {return Math.pow(x - tmp2, 2);}).reduce(add) / tmp.length);
+        case 't':
+        case 'str': return args[0].toString();
+        case 'sum': return args.map(parseNumAlways).reduce(add);
+        case 'tan': return Math.tan(args[0]);
+        case 'upper':
+        case 'ucase': return args[0].toString().toUpperCase();
+        case 'value':
+        case 'val': return (/^\d+/.exec(args[0].toString().replace(/\s/g, '')) || [''])[0];
+        case 'var':
+            tmp = args.filter(isNotNaNAsFloat).map(parseNumAlways);
+            tmp2 = tmp.reduce(add) / tmp.length;
+            return tmp.map(function(x) {return Math.pow(x - tmp2, 2);}).reduce(add) / (tmp.length - 1);
+        case 'vara':
+            tmp = args.map(parseNumAlways);
+            tmp2 = tmp.reduce(add) / tmp.length;
+            return tmp.map(function(x) {return Math.pow(x - tmp2, 2);}).reduce(add) / (tmp.length - 1);
+        case 'varp':
+            tmp = args.filter(isNotNaNAsFloat).map(parseNumAlways);
+            tmp2 = tmp.reduce(add) / tmp.length;
+            return tmp.map(function(x) {return Math.pow(x - tmp2, 2);}).reduce(add) / tmp.length;
+        case 'varpa':
+            tmp = args.map(parseNumAlways);
+            tmp2 = tmp.reduce(add) / tmp.length;
+            return tmp.map(function(x) {return Math.pow(x - tmp2, 2);}).reduce(add) / tmp.length;
     }
 };
 
@@ -282,14 +404,13 @@ function parse(expression) {
     function parseFunc() {
         var funcName = accept('funcopen');
         if (!funcName) {
-            return parseRange();
+            return parsePrimitive();
         }
-        var peeked = peek();
         var args = [];
         while (peek()) {
             if (accept('rparen')) break;
             if (args.length) assert('comma');
-            args.push(parseExpression());
+            args.push(parseRange());
         }
         return new ExpressionNode('function', {
             name: funcName.value,
@@ -314,11 +435,15 @@ function parse(expression) {
         if (!peeked) {
             return lval;
         }
-        return new ExpressionNode(peeked.value === '+' ? 'binop_add' : 'binop_sub', {
-            left: lval,
-            operator: peeked.value,
-            right: parseAddBinop(),
-        });
+        return new ExpressionNode(
+            peeked.value === '+' ? 'binop_add' :
+                (peeked.value === '&' ? 'binop_concat' : 'binop_sub'),
+            {
+                left: lval,
+                operator: peeked.value,
+                right: parseAddBinop(),
+            }
+        );
     }
     function parseExpression() {
         return parseAddBinop();
@@ -426,26 +551,37 @@ WebSheet.prototype.forceRerender = function() {
     listen(this.elem, 'blur', this.onBlur.bind(this));
     unlisten(this.elem, 'keyup');
     listen(this.elem, 'keyup', this.onKeyup.bind(this));
+    unlisten(this.elem, 'keydown');
+    listen(this.elem, 'keydown', this.onKeydown.bind(this));
 };
 
 WebSheet.prototype.onFocus = function(e) {
     var row = e.target.getAttribute('data-row') | 0;
     var col = e.target.getAttribute('data-col') | 0;
     e.target.value = (this.data[row] || [])[col] || '';
+    e.target.select(0, e.target.value.length);
 };
 WebSheet.prototype.onBlur = function(e) {
     var row = e.target.getAttribute('data-row') | 0;
     var col = e.target.getAttribute('data-col') | 0;
     this.setValueAtPosition(row, col, e.target.value);
 };
+WebSheet.prototype.onKeydown = function(e) {
+    var next;
+    if (e.keyCode === 37 && e.target.selectionStart === 0) {
+        next = this.elem.querySelector('[data-id="' + e.target.getAttribute('data-id-prev-col') + '"]');
+    } else if (e.keyCode === 39 && e.target.selectionEnd === e.target.value.length) {
+        next = this.elem.querySelector('[data-id="' + e.target.getAttribute('data-id-next-col') + '"]');
+    }
+    if (next) {
+        next.focus();
+        e.preventDefault();
+    }
+};
 WebSheet.prototype.onKeyup = function(e) {
     var next;
     if (e.keyCode === 13 || e.keyCode === 40) {
         next = this.elem.querySelector('[data-id="' + e.target.getAttribute('data-id-next-row') + '"]');
-    } else if (e.keyCode === 37 && e.target.selectionStart === 0) {
-        next = this.elem.querySelector('[data-id="' + e.target.getAttribute('data-id-prev-col') + '"]');
-    } else if (e.keyCode === 39 && e.target.selectionEnd === e.target.value.length) {
-        next = this.elem.querySelector('[data-id="' + e.target.getAttribute('data-id-next-col') + '"]');
     } else if (e.keyCode === 38) {
         next = this.elem.querySelector('[data-id="' + e.target.getAttribute('data-id-prev-row') + '"]');
     }
@@ -467,7 +603,11 @@ WebSheet.prototype.clearDependants = function(id) {
 
 WebSheet.prototype.getCalculatedValueAtID = function(id) {
     var pos = getCellPos(id);
-    return (this.calculated[pos.row] || [])[pos.col] || (this.data[pos.row] || [])[pos.col];
+    return this.getCalculatedValueAtPos(pos.row, pos.col);
+};
+
+WebSheet.prototype.getCalculatedValueAtPos = function(row, col) {
+    return (this.calculated[row] || [])[col] || (this.data[row] || [])[col];
 };
 
 WebSheet.prototype.updateDependencies = function(cellID) {
