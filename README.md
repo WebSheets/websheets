@@ -12,3 +12,8 @@ An experiment to make a spreadsheet engine for the web.
     + Dynamically update as referenced values update
 - Dynamically sized columns
 - Keyboard interactions similar to Excel
+- Drag and drop
+    + Drag cell to move
+    + Drag corner of cell to copy
+    + Copied cells adjust their formulas
+- Import parsed tabular data (`loadData`)
