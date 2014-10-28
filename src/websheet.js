@@ -114,6 +114,10 @@ ExpressionNode.prototype.walk = function(cb) {
         case 'number':
         case 'identifier':
             return;
+        case 'range':
+            this.start.walk(cb);
+            this.end.walk(cb);
+            return;
         case 'function':
             this.args.forEach(function(arg) {
                 arg.walk(cb);
@@ -127,6 +131,46 @@ ExpressionNode.prototype.walk = function(cb) {
             this.left.walk(cb);
             this.right.walk(cb);
     }
+};
+
+ExpressionNode.prototype.toString = function() {
+    switch (this.type) {
+        case 'boolean': return this.value ? 'true' : 'false';
+        case 'number': return this.value.toString();
+        case 'identifier': return this.value.toUpperCase();
+        case 'range': return this.start.toString() + ':' + this.end.toString();
+        case 'function': return this.name + '(' + this.args.map(function(a) {return a.toString();}).join(',') + ')';
+        case 'binop_mult': return this.left.toString() + '*' + this.right.toString();
+        case 'binop_div': return this.left.toString() + '/' + this.right.toString();
+        case 'binop_add': return this.left.toString() + '+' + this.right.toString();
+        case 'binop_sub': return this.left.toString() + '-' + this.right.toString();
+        case 'binop_concat': return this.left.toString() + '&' + this.right.toString();
+    }
+};
+
+ExpressionNode.prototype.clone = function() {
+    switch (this.type) {
+        case 'boolean':
+        case 'number':
+        case 'identifier':
+            return new ExpressionNode(this.type, {value: this.value});
+        case 'range': return new ExpressionNode(this.type, {start: this.start.clone(), end: this.end.clone()});
+        case 'function': return new ExpressionNode(this.type, {name: this.name, args: this.args.map(function(arg) {return arg.clone();})});
+        case 'binop_mult':
+        case 'binop_div':
+        case 'binop_add':
+        case 'binop_sub':
+        case 'binop_concat':
+            return new ExpressionNode(this.type, {left: this.left.clone(), right: this.right.clone()});
+    }
+};
+
+ExpressionNode.prototype.adjust = function(deltaRow, deltaCol) {
+    this.walk(function(x) {
+        if (x.type !== 'identifier') return;
+        var pos = getCellPos(x.value);
+        x.value = getCellID(pos.row + deltaRow, pos.col + deltaCol);
+    });
 };
 
 function iterateRangeNode(node, cb) {
@@ -461,6 +505,7 @@ function parse(expression) {
 
 var DRAG_NONE = 0;
 var DRAG_MOVE = 1;
+var DRAG_HANDLE = 2;
 
 var defaultParams = {
     width: 5,
@@ -585,6 +630,8 @@ WebSheet.prototype.forceRerender = function() {
     listen(this.elem, 'mousedown', this.onMousedown.bind(this));
     unlisten(this.elem, 'mouseup');
     listen(this.elem, 'mouseup', this.onMouseup.bind(this));
+    unlisten(this.elem, 'mouseover');
+    listen(this.elem, 'mouseover', this.onMouseover.bind(this));
 
     workQueue.forEach(function(x) {x();});
 };
@@ -600,6 +647,7 @@ WebSheet.prototype.onBlur = function(e) {
     var row = e.target.getAttribute('data-row') | 0;
     var col = e.target.getAttribute('data-col') | 0;
     this.setValueAtPosition(row, col, e.target.value);
+    if (this.calculated[row] && col in this.calculated[row]) e.target.value = this.calculated[row][col];
     e.target.parentNode.className = 'websheet-cell-wrapper';
 };
 WebSheet.prototype.onKeydown = function(e) {
@@ -627,32 +675,132 @@ WebSheet.prototype.onMousedown = function(e) {
     var target = e.target;
     var id;
     var pos;
-    if (target.className.indexOf('websheet-has-focus') !== -1) {
-        e.preventDefault();
-        this.dragType = DRAG_MOVE;
-        this.elem.className += ' websheet-grabbing';
-        id = this.dragSource = target.firstChild.getAttribute('data-id');
-        pos = getCellPos(id);
-        this.setValueAtPosition(pos.row, pos.col, target.firstChild.value);
-    } else {
-        //
+    if (!target.classList.contains('websheet-has-focus')) {
+        return;
     }
+
+    e.preventDefault();
+
+    id = this.dragSource = target.firstChild.getAttribute('data-id');
+    pos = getCellPos(id);
+
+    // Assign the value of the currently focused cell's input to the cell, just
+    // incase it changed and hasn't been updated on the blur event.
+    this.setValueAtPosition(pos.row, pos.col, target.firstChild.value);
+    if (e.layerX > target.clientWidth - 10 && e.layerY > target.clientHeight - 10) {
+        // this.data[pos.row] = this.data[pos.row] || [];
+        // this.data[pos.row][pos.col] = target.value;
+        this.dragType = DRAG_HANDLE;
+        return;
+    }
+
+    this.dragType = DRAG_MOVE;
+    this.elem.className += ' websheet-grabbing';
 };
 WebSheet.prototype.onMouseup = function(e) {
     var target = e.target;
     var pos;
     var pos2;
-    if (this.dragType === DRAG_MOVE && target.className.indexOf('websheet-cell') !== -1) {
-        // debugger;
+    if (this.dragType && target.classList.contains('websheet-cell')) {
         pos = getCellPos(this.dragSource);
         pos2 = getCellPos(target.getAttribute('data-id'));
-        this.setValueAtPosition(pos2.row, pos2.col, this.getValueAtPos(pos.row, pos.col) || '');
-        this.clearCell(pos.row, pos.col);
-        e.target.focus();
+
+
+        if (this.dragType === DRAG_MOVE) {
+            this.setValueAtPosition(pos2.row, pos2.col, this.getValueAtPos(pos.row, pos.col) || '');
+            this.clearCell(pos.row, pos.col);
+            e.target.focus();
+        } else if (this.dragType === DRAG_HANDLE && (pos.row === pos2.row || pos.col === pos2.col)) {
+            var i;
+            var rawSource = this.getValueAtPos(pos.row, pos.col) || '';
+            var parsedSource = rawSource[0] === '=' && parse(rawSource.substr(1));
+            var tmp;
+            var min;
+            if (pos.row === pos2.row) {
+                min = Math.min(pos.col, pos2.col);
+                for (i = min; i <= Math.max(pos.col, pos2.col); i++) {
+                    if (i === pos.col) continue;
+                    if (parsedSource) {
+                        tmp = parsedSource.clone();
+                        tmp.adjust(0, i - min);
+                        this.setValueAtPosition(pos.row, i, '=' + tmp.toString());
+                    } else {
+                        this.setValueAtPosition(pos.row, i, rawSource);
+                    }
+                }
+            } else if (pos.col === pos2.col) {
+                min = Math.min(pos.row, pos2.row);
+                for (i = min; i <= Math.max(pos.row, pos2.row); i++) {
+                    if (i === pos.row) continue;
+                    if (parsedSource) {
+                        tmp = parsedSource.clone();
+                        tmp.adjust(i - min, 0);
+                        this.setValueAtPosition(i, pos.col, '=' + tmp.toString());
+                    } else {
+                        this.setValueAtPosition(i, pos.col, rawSource);
+                    }
+                }
+            } else {
+                console.error('Cannot drag handle diagonally');
+            }
+        }
     }
     this.elem.className = 'websheet';
     this.dragType = 0;
     this.dragSource = null;
+
+    var existing = this.elem.querySelectorAll('.websheet-cell-hover');
+    for (var i = 0; i < existing.length; i++) {
+        existing[i].classList.remove('websheet-cell-hover');
+    }
+};
+WebSheet.prototype.onMouseover = function(e) {
+    if (!this.dragType) return;
+    if (!e.target.classList.contains('websheet-cell')) return;
+
+    var toRemoveClassFrom = [];
+
+    var existing = this.elem.querySelectorAll('.websheet-cell-hover');
+    for (var i = 0; i < existing.length; i++) {
+        toRemoveClassFrom.push(existing[i].firstChild.dataset.id);
+    }
+
+    var targetID = e.target.dataset.id;
+    if (targetID === this.dragSource) {
+        return;
+    }
+
+    if (this.dragType === DRAG_HANDLE) {
+        var destPos = getCellPos(targetID);
+        var srcPos = getCellPos(this.dragSource);
+        var tmp;
+        var trcfTmp;
+        if (destPos.col === srcPos.col) {
+            for (i = Math.min(srcPos.row, destPos.row); i <= Math.max(srcPos.row, destPos.row); i++) {
+                tmp = getCellID(i, srcPos.col);
+                if ((trcfTmp = toRemoveClassFrom.indexOf(tmp)) !== -1) {
+                    toRemoveClassFrom.splice(trcfTmp, 1);
+                } else {
+                    this.elem.querySelector('[data-id="' + tmp + '"]').parentNode.classList.add('websheet-cell-hover');
+                }
+            }
+        } else if (destPos.row === srcPos.row) {
+            for (i = Math.min(srcPos.col, destPos.col); i <= Math.max(srcPos.col, destPos.col); i++) {
+                tmp = getCellID(srcPos.row, i);
+                if ((trcfTmp = toRemoveClassFrom.indexOf(tmp)) !== -1) {
+                    toRemoveClassFrom.splice(trcfTmp, 1);
+                } else {
+                    this.elem.querySelector('[data-id="' + tmp + '"]').parentNode.classList.add('websheet-cell-hover');
+                }
+            }
+        }
+    } else {
+        e.target.parentNode.classList.add('websheet-cell-hover');
+    }
+
+    toRemoveClassFrom.forEach(function(id) {
+        this.elem.querySelector('[data-id="' + id + '"]').parentNode.classList.remove('websheet-cell-hover');
+    }, this);
 };
 
 WebSheet.prototype.clearDependants = function(id) {
@@ -701,7 +849,7 @@ WebSheet.prototype.setValueAtPosition = function(row, col, value, force) {
 
     this.data[row] = this.data[row] || [];
     if (this.data[row][col] === value && !force) {
-        if (elem && this.calculated[row] && this.calculated[row][col]) elem.value = this.calculated[row][col];
+        // if (elem && this.calculated[row] && this.calculated[row][col]) elem.value = this.calculated[row][col];
         return;
     }
 
@@ -718,6 +866,7 @@ WebSheet.prototype.setValueAtPosition = function(row, col, value, force) {
         this.updateDependencies(cellID);
         if (elem) elem.value = value;
     }
+    return;
 };
 
 WebSheet.prototype.calculateValueAtPosition = function(row, col, expression) {
@@ -726,7 +875,7 @@ WebSheet.prototype.calculateValueAtPosition = function(row, col, expression) {
 
     // Parse the expression
     var parsed = parse(expression);
-    console.log(parsed);
+    // console.log(parsed);
 
     // Evaluate the expression to find a value
     var value;
@@ -819,7 +968,7 @@ function getCellID(row, column) {
 var cellPosCache = new Map();
 function getCellPos(id) {
     if (cellPosCache.has(id)) return cellPosCache.get(id);
-    var matches = /(\w+)(\d)+/.exec(id);
+    var matches = /^([a-z]+)([0-9]+)$/i.exec(id);
     var charBit = matches[1];
     var character;
     var col = 0;

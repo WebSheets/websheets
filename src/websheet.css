@@ -26,8 +26,8 @@
     border: 0;
     cursor: -webkit-grab;
     cursor: grab;
-    margin: -4px -4px -4px -3px !important; /*sorry*/
-    padding: 4px;
+    margin: -6px -6px -6px -5px !important; /* sorry not sorry */
+    padding: 6px;
     z-index: 2;
 }
 .websheet-cell-wrapper:last-child {
@@ -56,8 +56,29 @@
     outline: none;
 }
 
-.websheet-grabbing .websheet-cell-wrapper:hover {
-    border-color: white;
-    border-style: dashed;
-    z-index: 2;
+.websheet-cell-wrapper:after {
+    background: rgb(51, 153, 255);
+    border: 2px solid white;
+    border-radius: 4px;
+    bottom: 5px;
+    content: "";
+    display: block;
+    height: 5px;
+    opacity: 0;
+    position: absolute;
+    right: 5px;
+    transition: bottom 0.25s, right 0.25s, opacity 0.1s;
+    width: 5px;
+}
+
+.websheet-cell-wrapper.websheet-has-focus:after {
+    bottom: -4px;
+    cursor: crosshair;
+    opacity: 1;
+    right: -4px;
+}
+
+.websheet-cell-hover input {
+    background: rgb(51, 153, 255);
+    color: #fff;
 }
