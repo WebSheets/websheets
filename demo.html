@@ -5,8 +5,10 @@
 </head>
 <body>
   <div class="websheet"></div>
-  <script src="src/es6-collections.js"></script>
   <script src="src/websheet.js"></script>
-  <script src="demo.js"></script>
+  <script>
+    var sheet = new WebSheet(document.querySelector('.websheet'));
+    sheet.forceRerender();
+  </script>
 </body>
 </html>

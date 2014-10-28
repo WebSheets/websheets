@@ -529,8 +529,8 @@ function WebSheet(elem, params) {
     this.formatting = [];
 
     this.depStack = [];
-    this.dependencies = new Map(); // Map of cell ID to array of dependant cell IDs
-    this.dependants = new Map(); // Map of cell ID to array of dependencies
+    this.dependencies = {}; // Map of cell ID to array of dependant cell IDs
+    this.dependants = {}; // Map of cell ID to array of dependencies
 
     this.dragType = DRAG_NONE;
     this.dragSource = null;
@@ -804,12 +804,12 @@ WebSheet.prototype.onMouseover = function(e) {
 };
 
 WebSheet.prototype.clearDependants = function(id) {
-    var deps = this.dependants.get(id);
+    var deps = this.dependants[id];
     if (!deps) return;
     var remDeps;
     var idx;
     for (var i = 0; i < deps.length; i++) {
-        remDeps = this.dependencies.get(deps[i]);
+        remDeps = this.dependencies[deps[i]];
         if (!remDeps) continue;
         idx = remDeps.indexOf(id);
         if (idx !== -1) remDeps.splice(idx, 1);
@@ -828,7 +828,7 @@ WebSheet.prototype.getCalculatedValueAtPos = function(row, col) {
 WebSheet.prototype.updateDependencies = function(cellID) {
     if (this.depStack.indexOf(cellID) !== -1) return;
     this.depStack.push(cellID);
-    var deps = this.dependencies.get(cellID);
+    var deps = this.dependencies[cellID];
     if (deps) {
         var dep;
         for (var i = 0; i < deps.length; i++) {
@@ -897,13 +897,13 @@ WebSheet.prototype.calculateValueAtPosition = function(row, col, expression) {
         if (dependants.indexOf(dep) !== -1) return;
         dependants.push(dep);
         var deps;
-        if (!this.dependencies.has(dep)) {
-            this.dependencies.set(dep, [cellID]);
-        } else if ((deps = this.dependencies.get(dep)) && deps.indexOf(cellID) === -1) {
+        if (!(dep in this.dependencies)) {
+            this.dependencies[dep] = [cellID];
+        } else if ((deps = this.dependencies[dep]) && deps.indexOf(cellID) === -1) {
             deps.push(cellID);
         }
     }.bind(this));
-    this.dependants.set(cellID, dependants);
+    this.dependants[cellID] = dependants;
 
     // Set the value of the element
     this.elem.querySelector('[data-id=' + cellID + ']').value = value;
@@ -920,7 +920,7 @@ WebSheet.prototype.clearCell = function(row, col) {
     if (row in this.data) delete this.data[row][col];
     if (row in this.calculated) delete this.calculated[row][col];
     this.clearDependants(cellID);
-    this.dependants.set(cellID, []);
+    this.dependants[cellID] = [];
 };
 
 WebSheet.prototype.addColumn = function() {
@@ -965,9 +965,9 @@ function getCellID(row, column) {
     return base + row;
 }
 
-var cellPosCache = new Map();
+var cellPosCache = {};
 function getCellPos(id) {
-    if (cellPosCache.has(id)) return cellPosCache.get(id);
+    if (id in cellPosCache) return cellPosCache[id];
     var matches = /^([a-z]+)([0-9]+)$/i.exec(id);
     var charBit = matches[1];
     var character;
@@ -979,7 +979,7 @@ function getCellPos(id) {
         charBit = charBit.substr(1);
     }
     var output = {col: col, row: matches[2] - 1};
-    cellPosCache.set(id, output);
+    cellPosCache[id] = output;
     return output;
 }
 
