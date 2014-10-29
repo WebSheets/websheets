@@ -10,9 +10,10 @@ var DEFAULT_BORDER_WIDTH = 1; // px
 var TOKEN_BOOL = /^(true|false)/i;
 var TOKEN_STRING = /^"([^\\]|\\.)*"/i;
 var TOKEN_CELL_ID = /^(\$?)(\w+)(\$?)(\d+)/i;
-var TOKEN_NUM = /^\-?((([1-9][0-9]*\.|0\.)[0-9]+)|([1-9][0-9]*))/;
+var TOKEN_NUM = /^\-?((([1-9][0-9]*\.|0\.)[0-9]+)|([1-9][0-9]*)|0)/;
 var TOKEN_BINOP_TIMES = /^(\/|\*|\^)/;
 var TOKEN_BINOP_ADD = /^(\+|\-|&)/;
+var TOKEN_BINOP_COMP = /^(<>|=|>=|<=|<|>)/;
 var TOKEN_FOPEN = /^(\w+)\(/;
 var TOKEN_RPAREN = /^\)/;
 var TOKEN_LPAREN = /^\(/;
@@ -250,20 +251,19 @@ ExpressionNode.prototype.run = function(sheet) {
         case 'number':
         case 'string':
             return this.value;
-        case 'identifier':
-            return parseNumMaybe(sheet.getCalculatedValueAtID(this.value)) || 0;
-        case 'binop_mult':
-            return this.left.run(sheet) * this.right.run(sheet);
-        case 'binop_div':
-            return this.left.run(sheet) / this.right.run(sheet);
-        case 'binop_add':
-            return parseFloat(this.left.run(sheet)) + parseFloat(this.right.run(sheet));
-        case 'binop_sub':
-            return this.left.run(sheet) - this.right.run(sheet);
-        case 'binop_concat':
-            return this.left.run(sheet).toString() + this.right.run(sheet).toString();
-        case 'binop_expon':
-            return Math.pow(this.left.run(sheet), this.right.run(sheet));
+        case 'identifier': return parseNumMaybe(sheet.getCalculatedValueAtID(this.value)) || 0;
+        case 'binop_mult': return this.left.run(sheet) * this.right.run(sheet);
+        case 'binop_div': return this.left.run(sheet) / this.right.run(sheet);
+        case 'binop_add': return parseFloat(this.left.run(sheet)) + parseFloat(this.right.run(sheet));
+        case 'binop_sub': return this.left.run(sheet) - this.right.run(sheet);
+        case 'binop_concat': return this.left.run(sheet).toString() + this.right.run(sheet).toString();
+        case 'binop_expon': return Math.pow(this.left.run(sheet), this.right.run(sheet));
+        case 'binop_comp_lt': return parseFloat(this.left.run(sheet)) < parseFloat(this.right.run(sheet));
+        case 'binop_comp_lte': return parseFloat(this.left.run(sheet)) <= parseFloat(this.right.run(sheet));
+        case 'binop_comp_gt': return parseFloat(this.left.run(sheet)) > parseFloat(this.right.run(sheet));
+        case 'binop_comp_gte': return parseFloat(this.left.run(sheet)) >= parseFloat(this.right.run(sheet));
+        case 'binop_comp_eq': return this.left.run(sheet) == this.right.run(sheet);
+        case 'binop_comp_neq': return this.left.run(sheet) != this.right.run(sheet);
         case 'range':
             var rangeCells = [];
             iterateRangeNode(this, function(row, col) {
@@ -442,6 +442,8 @@ function parse(expression) {
             output = new ExpressionToken('binop_times', matches[0]);
         } else if (matches = TOKEN_BINOP_ADD.exec(remainder)) {
             output = new ExpressionToken('binop_add', matches[0]);
+        } else if (matches = TOKEN_BINOP_COMP.exec(remainder)) {
+            output = new ExpressionToken('binop_comp', matches[0]);
         } else if (matches = TOKEN_COMMA.exec(remainder)) {
             output = new ExpressionToken('comma', ',');
         } else if (matches = TOKEN_PERCENT.exec(remainder)) {
@@ -518,13 +520,13 @@ function parse(expression) {
     function parseFunc() {
         var funcName = accept('funcopen');
         if (!funcName) {
-            return parsePrimitive();
+            return parseRange();
         }
         var args = [];
         while (peek()) {
             if (accept('rparen')) break;
             if (args.length) assert('comma');
-            args.push(parseRange());
+            args.push(parseExpression());
         }
         return new ExpressionNode('function', {
             name: funcName.value,
@@ -569,8 +571,32 @@ function parse(expression) {
             }
         );
     }
+    function parseCompBinop() {
+        var lval = parseTimesBinop();
+        var peeked = accept('binop_comp');
+        if (!peeked) {
+            return lval;
+        }
+        var name;
+        switch (peeked.value) {
+            case '<': name = 'binop_comp_lt'; break;
+            case '<=': name = 'binop_comp_lte'; break;
+            case '>': name = 'binop_comp_gt'; break;
+            case '>=': name = 'binop_comp_gte'; break;
+            case '=': name = 'binop_comp_eq'; break;
+            case '<>': name = 'binop_comp_neq'; break;
+        }
+        return new ExpressionNode(
+            name,
+            {
+                left: lval,
+                operator: peeked.value,
+                right: parseCompBinop(),
+            }
+        );
+    }
     function parseExpression() {
-        return parseAddBinop();
+        return parseCompBinop();
     }
 
     return parseExpression();
