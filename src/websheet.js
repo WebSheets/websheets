@@ -10,7 +10,7 @@ var DEFAULT_BORDER_WIDTH = 1; // px
 var TOKEN_BOOL = /^(true|false)/i;
 var TOKEN_STRING = /^"([^\\]|\\.)*"/i;
 var TOKEN_CELL_ID = /^(\$?)(\w+)(\$?)(\d+)/i;
-var TOKEN_NUM = /^\-?(([1-9][0-9]*\.[0-9]+)|([1-9][0-9]*))/;
+var TOKEN_NUM = /^\-?((([1-9][0-9]*\.|0\.)[0-9]+)|([1-9][0-9]*))/;
 var TOKEN_BINOP_TIMES = /^(\/|\*|\^)/;
 var TOKEN_BINOP_ADD = /^(\+|\-|&)/;
 var TOKEN_FOPEN = /^(\w+)\(/;
@@ -143,7 +143,7 @@ ExpressionNode.prototype.toString = function() {
     switch (this.type) {
         case 'boolean': return this.value ? 'true' : 'false';
         case 'string': return JSON.stringify(this.value);
-        case 'number': return this.value.toString();
+        case 'number': return this.raw.toString();
         case 'identifier': return this.raw.toUpperCase();
         case 'range': return this.start.toString() + ':' + this.end.toString();
         case 'function': return this.name + '(' + this.args.map(function(a) {return a.toString();}).join(',') + ')';
@@ -159,9 +159,10 @@ ExpressionNode.prototype.toString = function() {
 ExpressionNode.prototype.clone = function() {
     switch (this.type) {
         case 'boolean':
-        case 'number':
         case 'string':
             return new ExpressionNode(this.type, {value: this.value});
+        case 'number':
+            return new ExpressionNode(this.type, {value: this.value, raw: this.raw});
         case 'identifier':
             return new ExpressionNode(this.type, {value: this.value, pinRow: this.pinRow, pinCol: this.pinCol, raw: this.raw});
         case 'range': return new ExpressionNode(this.type, {start: this.start.clone(), end: this.end.clone()});
@@ -452,9 +453,13 @@ function parse(expression) {
         if (accepted = accept('boolean')) {
             return new ExpressionNode('boolean', {value: accepted.value === 'true'});
         } else if (accepted = accept('number')) {
+            var raw = accepted.value;
             var tmp = parseFloat(accepted.value);
-            if (accept('percent')) tmp /= 100;
-            return new ExpressionNode('number', {value: tmp});
+            if (accept('percent')) {
+                raw += '%';
+                tmp /= 100;
+            }
+            return new ExpressionNode('number', {value: tmp, raw: raw});
         } else if (accepted = accept('string')) {
             return new ExpressionNode('string', {value: accepted.value});
         } else if (accepted = accept('ident')) {
@@ -466,7 +471,7 @@ function parse(expression) {
                 raw: accepted.value,
             });
         } else {
-            throw new SyntaxError();
+            throw new SyntaxError('Unrecognized primitive value');
         }
     }
     function parseRange() {
