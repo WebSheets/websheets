@@ -83,22 +83,18 @@ function unlisten(elem, event) {
     });
 }
 
-function isNaNAsFloat(value) {
-    return window.isNaN(parseFloat(value));
-}
-
 function isNotNaNAsFloat(value) {
-    return !window.isNaN(parseFloat(value));
+    return !isNaN(parseFloat(value));
 }
 
 function parseNumMaybe(value) {
     var parsed = parseFloat(value);
-    return window.isNaN(parsed) ? value : parsed;
+    return isNaN(parsed) ? value : parsed;
 }
 
 function parseNumAlways(value) {
     var parsed = parseFloat(value);
-    return window.isNaN(parsed) ? (value ? 1 : 0) : parsed;
+    return isNaN(parsed) ? (value ? 1 : 0) : parsed;
 }
 
 function Emitter() {
@@ -572,7 +568,7 @@ function parse(expression) {
         );
     }
     function parseCompBinop() {
-        var lval = parseTimesBinop();
+        var lval = parseAddBinop();
         var peeked = accept('binop_comp');
         if (!peeked) {
             return lval;
@@ -1009,7 +1005,7 @@ WebSheet.prototype.calculateValueAtPosition = function(row, col, expression) {
     var value;
     try {
         value = parsed.run(this);
-        if (window.isNaN(value)) value = '#VALUE!';
+        if (isNaN(value)) value = '#VALUE!';
     } catch (e) {
         console.error(e);
         value = '#ERROR!';
