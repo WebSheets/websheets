@@ -8,14 +8,17 @@ var DEFAULT_COLUMN_WIDTH = 100; // px
 var DEFAULT_BORDER_WIDTH = 1; // px
 
 var TOKEN_BOOL = /^(true|false)/i;
+var TOKEN_STRING = /^"([^\\]|\\.)*"/i;
 var TOKEN_CELL_ID = /^(\$?)(\w+)(\$?)(\d+)/i;
-var TOKEN_NUM = /^(([1-9][0-9]*\.[0-9]+)|([1-9][0-9]*))/;
-var TOKEN_BINOP_TIMES = /^(\/|\*)/;
+var TOKEN_NUM = /^\-?(([1-9][0-9]*\.[0-9]+)|([1-9][0-9]*))/;
+var TOKEN_BINOP_TIMES = /^(\/|\*|\^)/;
 var TOKEN_BINOP_ADD = /^(\+|\-|&)/;
 var TOKEN_FOPEN = /^(\w+)\(/;
 var TOKEN_RPAREN = /^\)/;
+var TOKEN_LPAREN = /^\(/;
 var TOKEN_COMMA = /^,/;
 var TOKEN_COLON = /^:/;
+var TOKEN_PERCENT = /^%/;
 var TOKEN_WS = /^\s+/;
 
 ///////////
@@ -28,6 +31,10 @@ function ident(x) {
 
 function factorial(n, modifier) {
     return n < 2 ? n : n * factorial(n - (modifier || 1));
+}
+
+function isNaN(x) {
+    return window.isNaN(x);
 }
 
 function extend(base, extension) {
@@ -126,6 +133,7 @@ ExpressionNode.prototype.walk = function(cb) {
         case 'binop_add':
         case 'binop_sub':
         case 'binop_concat':
+        case 'binop_expon':
             this.left.walk(cb);
             this.right.walk(cb);
     }
@@ -134,6 +142,7 @@ ExpressionNode.prototype.walk = function(cb) {
 ExpressionNode.prototype.toString = function() {
     switch (this.type) {
         case 'boolean': return this.value ? 'true' : 'false';
+        case 'string': return JSON.stringify(this.value);
         case 'number': return this.value.toString();
         case 'identifier': return this.raw.toUpperCase();
         case 'range': return this.start.toString() + ':' + this.end.toString();
@@ -143,6 +152,7 @@ ExpressionNode.prototype.toString = function() {
         case 'binop_add': return this.left.toString() + '+' + this.right.toString();
         case 'binop_sub': return this.left.toString() + '-' + this.right.toString();
         case 'binop_concat': return this.left.toString() + '&' + this.right.toString();
+        case 'binop_expon': return this.left.toString() + '^' + this.right.toString();
     }
 };
 
@@ -150,6 +160,7 @@ ExpressionNode.prototype.clone = function() {
     switch (this.type) {
         case 'boolean':
         case 'number':
+        case 'string':
             return new ExpressionNode(this.type, {value: this.value});
         case 'identifier':
             return new ExpressionNode(this.type, {value: this.value, pinRow: this.pinRow, pinCol: this.pinCol, raw: this.raw});
@@ -160,6 +171,7 @@ ExpressionNode.prototype.clone = function() {
         case 'binop_add':
         case 'binop_sub':
         case 'binop_concat':
+        case 'binop_expon':
             return new ExpressionNode(this.type, {left: this.left.clone(), right: this.right.clone()});
     }
 };
@@ -206,6 +218,7 @@ ExpressionNode.prototype.run = function(sheet) {
     switch (this.type) {
         case 'boolean':
         case 'number':
+        case 'string':
             return this.value;
         case 'identifier':
             return parseNumMaybe(sheet.getCalculatedValueAtID(this.value)) || 0;
@@ -214,11 +227,13 @@ ExpressionNode.prototype.run = function(sheet) {
         case 'binop_div':
             return this.left.run(sheet) / this.right.run(sheet);
         case 'binop_add':
-            return this.left.run(sheet) + this.right.run(sheet);
+            return parseFloat(this.left.run(sheet)) + parseFloat(this.right.run(sheet));
         case 'binop_sub':
             return this.left.run(sheet) - this.right.run(sheet);
         case 'binop_concat':
             return this.left.run(sheet).toString() + this.right.run(sheet).toString();
+        case 'binop_expon':
+            return Math.pow(this.left.run(sheet), this.right.run(sheet));
         case 'range':
             var rangeCells = [];
             iterateRangeNode(this, function(row, col) {
@@ -381,6 +396,8 @@ function parse(expression) {
             return lex();
         } else if (matches = TOKEN_BOOL.exec(remainder)) {
             output = new ExpressionToken('boolean', matches[0].toLowerCase());
+        } else if (matches = TOKEN_STRING.exec(remainder)) {
+            output = new ExpressionToken('string', JSON.parse(matches[0]));
         } else if (matches = TOKEN_NUM.exec(remainder)) {
             output = new ExpressionToken('number', matches[0]);
         } else if (matches = TOKEN_CELL_ID.exec(remainder)) {
@@ -389,12 +406,16 @@ function parse(expression) {
             output = new ExpressionToken('funcopen', matches[1]);
         } else if (matches = TOKEN_RPAREN.exec(remainder)) {
             output = new ExpressionToken('rparen', ')');
+        } else if (matches = TOKEN_LPAREN.exec(remainder)) {
+            output = new ExpressionToken('lparen', '(');
         } else if (matches = TOKEN_BINOP_TIMES.exec(remainder)) {
             output = new ExpressionToken('binop_times', matches[0]);
         } else if (matches = TOKEN_BINOP_ADD.exec(remainder)) {
             output = new ExpressionToken('binop_add', matches[0]);
         } else if (matches = TOKEN_COMMA.exec(remainder)) {
             output = new ExpressionToken('comma', ',');
+        } else if (matches = TOKEN_PERCENT.exec(remainder)) {
+            output = new ExpressionToken('percent', '%');
         } else if (matches = TOKEN_COLON.exec(remainder)) {
             output = new ExpressionToken('colon', ':');
         } else {
@@ -420,9 +441,9 @@ function parse(expression) {
         if (!peeked || peeked.type !== type) return null;
         return pop();
     }
-    function assert(types) {
+    function assert(type) {
         var popped = pop();
-        if (types.indexOf(popped.type) === -1) throw new SyntaxError();
+        if (popped.type !== type) throw new SyntaxError('Expected ' + type + ', got ' + popped.type);
         return popped;
     }
 
@@ -431,7 +452,11 @@ function parse(expression) {
         if (accepted = accept('boolean')) {
             return new ExpressionNode('boolean', {value: accepted.value === 'true'});
         } else if (accepted = accept('number')) {
-            return new ExpressionNode('number', {value: parseFloat(accepted.value)});
+            var tmp = parseFloat(accepted.value);
+            if (accept('percent')) tmp /= 100;
+            return new ExpressionNode('number', {value: tmp});
+        } else if (accepted = accept('string')) {
+            return new ExpressionNode('string', {value: accepted.value});
         } else if (accepted = accept('ident')) {
             var rematched = TOKEN_CELL_ID.exec(accepted.value);
             return new ExpressionNode('identifier', {
@@ -472,13 +497,23 @@ function parse(expression) {
             args: args,
         });
     }
+    function parseParen() {
+        if (!accept('lparen')) {
+            return parseFunc();
+        }
+        var output = parseExpression();
+        assert('rparen');
+        return output;
+    }
     function parseTimesBinop() {
-        var lval = parseFunc();
+        var lval = parseParen();
         var peeked = accept('binop_times');
         if (!peeked) {
             return lval;
         }
-        return new ExpressionNode(peeked.value === '*' ? 'binop_mult' : 'binop_div', {
+        return new ExpressionNode(
+            peeked.value === '*' ? 'binop_mult' :
+                (peeked.value === '/' ? 'binop_div' : 'binop_expon'), {
             left: lval,
             operator: peeked.value,
             right: parseTimesBinop(),
@@ -911,9 +946,10 @@ WebSheet.prototype.calculateValueAtPosition = function(row, col, expression) {
     var value;
     try {
         value = parsed.run(this);
+        if (window.isNaN(value)) value = '#VALUE!';
     } catch (e) {
         console.error(e);
-        value = '#ERROR';
+        value = '#ERROR!';
         parsed = null;
     }
 
