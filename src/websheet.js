@@ -100,6 +100,35 @@ function parseNumAlways(value) {
     return window.isNaN(parsed) ? (value ? 1 : 0) : parsed;
 }
 
+function Emitter() {
+    var listeners = {};
+
+    this.fire = function(name, arg) {
+        var results = [];
+        var result;
+        var i;
+        if (name in listeners) {
+            for (i = 0; i < listeners[name].length; i++) {
+                result = listeners[name][i].call(null, arg);
+                if (result) results.push(result);
+            }
+        }
+        return results;
+    };
+    var on = this.on = function(name, listener) {
+        if (!(name in listeners)) {
+            listeners[name] = [];
+        }
+        listeners[name].push(listener);
+    };
+
+    this.endpoint = function(obj) {
+        obj = obj || {};
+        obj.on = on;
+        return obj;
+    };
+}
+
 ///////////
 // Expression Parser
 ///////////
@@ -595,6 +624,9 @@ function WebSheet(elem, params) {
             me.elem.className = 'websheet';
         }
     });
+
+    this.valueUpdates = new Emitter();
+    this.calculatedUpdates = new Emitter();
 }
 
 WebSheet.prototype.getCell = function(id) {
@@ -920,7 +952,6 @@ WebSheet.prototype.setValueAtPosition = function(row, col, value, force) {
 
     this.data[row] = this.data[row] || [];
     if (this.data[row][col] === value && !force) {
-        // if (elem && this.calculated[row] && this.calculated[row][col]) elem.value = this.calculated[row][col];
         return;
     }
 
@@ -931,13 +962,14 @@ WebSheet.prototype.setValueAtPosition = function(row, col, value, force) {
 
     this.clearDependants(cellID);
 
+    this.valueUpdates.fire(cellID, value);
+
     if (value[0] === '=') {
         this.calculateValueAtPosition(row, col, value.substr(1));
     } else {
         this.updateDependencies(cellID);
         if (elem) elem.value = value;
     }
-    return;
 };
 
 WebSheet.prototype.calculateValueAtPosition = function(row, col, expression) {
@@ -983,7 +1015,10 @@ WebSheet.prototype.calculateValueAtPosition = function(row, col, expression) {
     // Set the value of the element
     this.getCell(cellID).value = value;
 
-    if (wasUpdated) this.updateDependencies(cellID);
+    if (wasUpdated) {
+        this.updateDependencies(cellID);
+        this.calculatedUpdates.fire(cellID, value);
+    }
 };
 
 WebSheet.prototype.clearCell = function(row, col) {
