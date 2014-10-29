@@ -4,7 +4,7 @@ An experiment to make a spreadsheet engine for the web.
 
 ## Features
 
-- Expressions
+- Formulas
     + Addition, subtraction, multiplication, division (with order of operations)
     + Ability to reference individual cells
     + Ability to pass ranges of cells (in two dimensions) as function arguments
@@ -16,7 +16,11 @@ An experiment to make a spreadsheet engine for the web.
     + Drag cell to move
     + Drag corner of cell to copy
     + Copied cells adjust their formulas
+        + Support for pinning identifiers with `$` (e.g., `$A$1`, `A$2`)
 - Import parsed tabular data (`loadData`)
+- Scheduler-based calculation system
+    + Prevents infinite loops in formulas
+    + Keeps complex formula dependencies from becoming very slow
 
 
 ## License
