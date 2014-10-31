@@ -1,0 +1,23 @@
+<html>
+<head>
+  <title>Websheets Demo</title>
+  <link rel="stylesheet" href="src/websheet.css">
+</head>
+<body>
+  <h1>Sheet1</h1>
+  <div class="websheet"></div>
+  <h1>Sheet2</h1>
+  <div class="websheet2"></div>
+  <script src="src/websheet.js"></script>
+  <script>
+    var context = new WebSheet.WebSheetContext();
+    var sheet = new WebSheet(document.querySelector('.websheet'), {context: context});
+    context.register(sheet, 'Sheet1');
+    var sheet2 = new WebSheet(document.querySelector('.websheet2'), {context: context});
+    context.register(sheet2, 'Sheet2');
+
+    sheet2.forceRerender();
+    sheet.forceRerender();
+  </script>
+</body>
+</html>

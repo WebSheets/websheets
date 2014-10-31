@@ -15,6 +15,7 @@ var TOKEN_BINOP_TIMES = /^(\/|\*|\^)/;
 var TOKEN_BINOP_ADD = /^(\+|\-|&)/;
 var TOKEN_BINOP_COMP = /^(<>|=|>=|<=|<|>)/;
 var TOKEN_FOPEN = /^(\w+)\(/;
+var TOKEN_XSOPEN = /^(\w+)!/;
 var TOKEN_RPAREN = /^\)/;
 var TOKEN_LPAREN = /^\(/;
 var TOKEN_COMMA = /^,/;
@@ -100,17 +101,13 @@ function parseNumAlways(value) {
 function Emitter() {
     var listeners = {};
 
-    this.fire = function(name, arg) {
-        var results = [];
-        var result;
+    this.fire = function(name) {
+        if (!(name in listeners)) return;
+        var args = Array.prototype.slice.call(arguments, 1);
         var i;
-        if (name in listeners) {
-            for (i = 0; i < listeners[name].length; i++) {
-                result = listeners[name][i].call(null, arg);
-                if (result) results.push(result);
-            }
+        for (i = 0; i < listeners[name].length; i++) {
+            listeners[name][i].apply(null, args);
         }
-        return results;
     };
     var on = this.on = function(name, listener) {
         if (!(name in listeners)) {
@@ -118,10 +115,19 @@ function Emitter() {
         }
         listeners[name].push(listener);
     };
+    var off = this.off = function(name, listener) {
+        if (!(name in listeners)) {
+            return;
+        }
+        var idx = listeners[name].indexOf(listener);
+        if (idx === -1) return;
+        listeners[name].splice(idx, 1);
+    };
 
     this.endpoint = function(obj) {
         obj = obj || {};
         obj.on = on;
+        obj.off = off;
         return obj;
     };
 }
@@ -143,7 +149,7 @@ function ExpressionNode(type, params) {
 }
 
 ExpressionNode.prototype.walk = function(cb) {
-    cb(this);
+    if (cb(this) === false) return;
     switch (this.type) {
         case 'range':
             this.start.walk(cb);
@@ -153,6 +159,9 @@ ExpressionNode.prototype.walk = function(cb) {
             this.args.forEach(function(arg) {
                 arg.walk(cb);
             });
+            return;
+        case 'sheetlookup':
+            this.content.walk(cb);
             return;
         case 'binop_mult':
         case 'binop_div':
@@ -171,6 +180,7 @@ ExpressionNode.prototype.toString = function() {
         case 'string': return JSON.stringify(this.value);
         case 'number': return this.raw.toString();
         case 'identifier': return this.raw.toUpperCase();
+        case 'sheetlookup': return this.sheet + '!' + this.content.toString();
         case 'range': return this.start.toString() + ':' + this.end.toString();
         case 'function': return this.name + '(' + this.args.map(function(a) {return a.toString();}).join(',') + ')';
         case 'binop_mult': return this.left.toString() + '*' + this.right.toString();
@@ -191,6 +201,7 @@ ExpressionNode.prototype.clone = function() {
             return new ExpressionNode(this.type, {value: this.value, raw: this.raw});
         case 'identifier':
             return new ExpressionNode(this.type, {value: this.value, pinRow: this.pinRow, pinCol: this.pinCol, raw: this.raw});
+        case 'sheetlookup': return new ExpressionNode(this.type, {sheet: this.sheet, content: this.content.clone()});
         case 'range': return new ExpressionNode(this.type, {start: this.start.clone(), end: this.end.clone()});
         case 'function': return new ExpressionNode(this.type, {name: this.name, args: this.args.map(function(arg) {return arg.clone();})});
         case 'binop_mult':
@@ -237,6 +248,19 @@ ExpressionNode.prototype.findCellDependencies = function(cb) {
             iterateRangeNode(node, function(row, col) {
                 cb(getCellID(row, col));
             });
+        } else if (node.type === 'sheetlookup') {
+            return false; // Kills traversal; handled by findSheetDependencies
+        }
+    });
+};
+
+ExpressionNode.prototype.findSheetDependencies = function(cb) {
+    this.walk(function(node) {
+        if (node.type === 'sheetlookup') {
+            node.content.findCellDependencies(function(cellID) {
+                cb(node.sheet, cellID);
+            });
+            return false;
         }
     });
 };
@@ -248,6 +272,11 @@ ExpressionNode.prototype.run = function(sheet) {
         case 'string':
             return this.value;
         case 'identifier': return parseNumMaybe(sheet.getCalculatedValueAtID(this.value)) || 0;
+        case 'sheetlookup':
+            if (!sheet.context) throw new Error('Cross-sheet lookup in single-sheet context');
+            var newSheet = sheet.context.sheets[this.sheet];
+            if (!newSheet) return null;
+            return this.content.run(newSheet);
         case 'binop_mult': return this.left.run(sheet) * this.right.run(sheet);
         case 'binop_div': return this.left.run(sheet) / this.right.run(sheet);
         case 'binop_add': return parseFloat(this.left.run(sheet)) + parseFloat(this.right.run(sheet));
@@ -426,10 +455,12 @@ function parse(expression) {
             output = new ExpressionToken('string', JSON.parse(matches[0]));
         } else if (matches = TOKEN_NUM.exec(remainder)) {
             output = new ExpressionToken('number', matches[0]);
-        } else if (matches = TOKEN_CELL_ID.exec(remainder)) {
-            output = new ExpressionToken('ident', matches[0].toUpperCase());
         } else if (matches = TOKEN_FOPEN.exec(remainder)) {
             output = new ExpressionToken('funcopen', matches[1]);
+        } else if (matches = TOKEN_XSOPEN.exec(remainder)) {
+            output = new ExpressionToken('sheetref', matches[1]);
+        } else if (matches = TOKEN_CELL_ID.exec(remainder)) {
+            output = new ExpressionToken('ident', matches[0].toUpperCase());
         } else if (matches = TOKEN_RPAREN.exec(remainder)) {
             output = new ExpressionToken('rparen', ')');
         } else if (matches = TOKEN_LPAREN.exec(remainder)) {
@@ -529,9 +560,19 @@ function parse(expression) {
             args: args,
         });
     }
+    function parseSheetRef() {
+        var sheetref = accept('sheetref');
+        if (!sheetref) {
+            return parseFunc();
+        }
+        return new ExpressionNode('sheetlookup', {
+            sheet: sheetref.value,
+            content: parseRange(),
+        });
+    }
     function parseParen() {
         if (!accept('lparen')) {
-            return parseFunc();
+            return parseSheetRef();
         }
         var output = parseExpression();
         assert('rparen');
@@ -610,7 +651,7 @@ var DRAG_HANDLE = 2;
 
 var defaultParams = {
     width: 5,
-    height: 20,
+    height: 5,
 };
 
 function WebSheet(elem, params) {
@@ -649,6 +690,9 @@ function WebSheet(elem, params) {
 
     this.valueUpdates = new Emitter();
     this.calculatedUpdates = new Emitter();
+
+    this.context = params.context || null;
+    this.name = null;
 }
 
 WebSheet.prototype.getCell = function(id) {
@@ -926,6 +970,9 @@ WebSheet.prototype.clearDependants = function(id) {
         idx = remDeps.indexOf(id);
         if (idx !== -1) remDeps.splice(idx, 1);
     }
+
+    if (!this.context) return;
+    this.context.clearDependencies(this, id);
 };
 
 WebSheet.prototype.getCalculatedValueAtID = function(id) {
@@ -984,7 +1031,7 @@ WebSheet.prototype.setValueAtPosition = function(row, col, value, force) {
 
     this.clearDependants(cellID);
 
-    this.valueUpdates.fire(cellID, value);
+    this.valueUpdates.fire(cellID, value, 'value');
 
     if (value[0] === '=') {
         this.calculateValueAtPosition(row, col, value.substr(1));
@@ -1022,16 +1069,37 @@ WebSheet.prototype.calculateValueAtPosition = function(row, col, expression) {
 
     // Set the dependants
     var dependants = [];
-    if (parsed) parsed.findCellDependencies(function(dep) {
-        if (dependants.indexOf(dep) !== -1) return;
-        dependants.push(dep);
-        var deps;
-        if (!(dep in this.dependencies)) {
-            this.dependencies[dep] = [cellID];
-        } else if ((deps = this.dependencies[dep]) && deps.indexOf(cellID) === -1) {
-            deps.push(cellID);
+    if (parsed) {
+        // Bind intra-sheet dependencies
+        parsed.findCellDependencies(function(dep) {
+            if (dependants.indexOf(dep) !== -1) return;
+            dependants.push(dep);
+            var deps;
+            if (!(dep in this.dependencies)) {
+                this.dependencies[dep] = [cellID];
+            } else if ((deps = this.dependencies[dep]) && deps.indexOf(cellID) === -1) {
+                deps.push(cellID);
+            }
+        }.bind(this));
+
+        // Bind inter-sheet dependencies if a sheet context exists
+        if (this.context) {
+            this.context.clearDependencies(this, cellID);
+            var sheetDeps = [];
+            parsed.findSheetDependencies(function(sheet, dep) {
+                if (!this.context.sheets[sheet]) return;
+                var depName = sheet + '!' + dep;
+                if (sheetDeps.indexOf(depName) !== -1) return;
+                sheetDeps.push(depName);
+
+                this.context.setDependency(this, cellID, sheet, dep, function() {
+                    this.calculateValueAtPosition(row, col, expression);
+                }.bind(this));
+
+            }.bind(this));
         }
-    }.bind(this));
+
+    }
     this.dependants[cellID] = dependants;
 
     // Set the value of the element
@@ -1039,7 +1107,7 @@ WebSheet.prototype.calculateValueAtPosition = function(row, col, expression) {
 
     if (wasUpdated) {
         this.updateDependencies(cellID);
-        this.calculatedUpdates.fire(cellID, value);
+        this.calculatedUpdates.fire(cellID, value, 'calculated');
     }
 };
 
@@ -1177,6 +1245,51 @@ function getCellPos(id) {
     cellPosCache[id] = output;
     return output;
 }
+
+
+function WebSheetContext() {
+    this.sheets = {};
+    this.dependencies = {};
+}
+WebSheet.WebSheetContext = WebSheetContext;
+
+WebSheetContext.prototype.register = function(sheet, name) {
+    this.sheets[name] = sheet;
+    sheet.name = name;
+};
+
+WebSheetContext.prototype.lookup = function(sheetName, cellID) {
+    if (!(sheetName in this.sheets)) return null;
+    return this.sheets[sheetName].getCalculatedValueAtID(cellID);
+};
+
+WebSheetContext.prototype.setDependency = function(fromSheet, fromSheetCellID, toSheetName, toCellID, cb) {
+    if (!(toSheetName in this.sheets)) return;
+    var fromID = fromSheet.name + '!' + fromSheetCellID;
+    var toID = toSheetName + '!' + toCellID;
+    this.dependencies[fromID] = this.dependencies[fromID] || [];
+
+    var updateCB = function(value, type) {
+        // Ignore value updates that preceed calculated updates
+        if (type === 'value' && value[0] === '=') return;
+        cb(value);
+    };
+
+    this.dependencies[fromID].push([toSheetName, toCellID, updateCB]);
+
+    this.sheets[toSheetName].valueUpdates.on(toCellID, updateCB);
+    this.sheets[toSheetName].calculatedUpdates.on(toCellID, updateCB);
+};
+
+WebSheetContext.prototype.clearDependencies = function(fromSheet, fromSheetCellID) {
+    var fromID = fromSheet.name + '!' + fromSheetCellID;
+    if (!(fromID in this.dependencies)) return;
+    this.dependencies[fromID].forEach(function(data) {
+        this.sheets[data[0]].valueUpdates.off(data[1], data[2]);
+        this.sheets[data[0]].calculatedUpdates.off(data[1], data[2]);
+    }, this);
+    this.dependencies[fromID] = [];
+};
 
 
 if (window.define) {
