@@ -1,3 +1,11 @@
+.websheet,
+.websheet *,
+.websheet *:before,
+.websheet *:after {
+    -webkit-box-sizing: content-box;
+    box-sizing: content-box;
+}
+
 .websheet.websheet-grabbing {
     cursor: -webkit-grabbing;
     cursor: grabbing;

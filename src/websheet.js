@@ -100,8 +100,12 @@ function parseNumAlways(value) {
 
 function Emitter() {
     var listeners = {};
+    var allListeners = [];
 
     this.fire = function(name) {
+        for (var i = 0; i < allListeners.length; i++) {
+            allListeners[i].apply(null, arguments);
+        }
         if (!(name in listeners)) return;
         var args = Array.prototype.slice.call(arguments, 1);
         var i;
@@ -115,19 +119,30 @@ function Emitter() {
         }
         listeners[name].push(listener);
     };
-    var off = this.off = function(name, listener) {
+    var onAll = this.onAll = function(listener) {
         if (!(name in listeners)) {
-            return;
+            listeners[name] = [];
         }
+        listeners[name].push(listener);
+    };
+    var off = this.off = function(name, listener) {
+        if (!(name in listeners)) return;
         var idx = listeners[name].indexOf(listener);
         if (idx === -1) return;
         listeners[name].splice(idx, 1);
+    };
+    var offAll = this.offAll = function(listener) {
+        var idx = allListeners.indexOf(listener);
+        if (idx === -1) return;
+        allListeners[name].splice(idx, 1);
     };
 
     this.endpoint = function(obj) {
         obj = obj || {};
         obj.on = on;
+        obj.onAll = onAll;
         obj.off = off;
+        obj.offAll = offAll;
         return obj;
     };
 }
@@ -274,7 +289,7 @@ ExpressionNode.prototype.run = function(sheet) {
         case 'identifier': return parseNumMaybe(sheet.getCalculatedValueAtID(this.value)) || 0;
         case 'sheetlookup':
             if (!sheet.context) throw new Error('Cross-sheet lookup in single-sheet context');
-            var newSheet = sheet.context.sheets[this.sheet];
+            var newSheet = sheet.context.sheets[this.sheet.toUpperCase()];
             if (!newSheet) return null;
             return this.content.run(newSheet);
         case 'binop_mult': return this.left.run(sheet) * this.right.run(sheet);
@@ -1087,7 +1102,7 @@ WebSheet.prototype.calculateValueAtPosition = function(row, col, expression) {
             this.context.clearDependencies(this, cellID);
             var sheetDeps = [];
             parsed.findSheetDependencies(function(sheet, dep) {
-                if (!this.context.sheets[sheet]) return;
+                if (!this.context.sheets[sheet.toUpperCase()]) return;
                 var depName = sheet + '!' + dep;
                 if (sheetDeps.indexOf(depName) !== -1) return;
                 sheetDeps.push(depName);
@@ -1254,18 +1269,20 @@ function WebSheetContext() {
 WebSheet.WebSheetContext = WebSheetContext;
 
 WebSheetContext.prototype.register = function(sheet, name) {
-    this.sheets[name] = sheet;
+    this.sheets[name.toUpperCase()] = sheet;
     sheet.name = name;
 };
 
 WebSheetContext.prototype.lookup = function(sheetName, cellID) {
+    sheetName = sheetName.toUpperCase();
     if (!(sheetName in this.sheets)) return null;
     return this.sheets[sheetName].getCalculatedValueAtID(cellID);
 };
 
 WebSheetContext.prototype.setDependency = function(fromSheet, fromSheetCellID, toSheetName, toCellID, cb) {
+    toSheetName = toSheetName.toUpperCase();
     if (!(toSheetName in this.sheets)) return;
-    var fromID = fromSheet.name + '!' + fromSheetCellID;
+    var fromID = fromSheet.name.toUpperCase() + '!' + fromSheetCellID;
     var toID = toSheetName + '!' + toCellID;
     this.dependencies[fromID] = this.dependencies[fromID] || [];
 
@@ -1282,7 +1299,7 @@ WebSheetContext.prototype.setDependency = function(fromSheet, fromSheetCellID, t
 };
 
 WebSheetContext.prototype.clearDependencies = function(fromSheet, fromSheetCellID) {
-    var fromID = fromSheet.name + '!' + fromSheetCellID;
+    var fromID = fromSheet.name.toUpperCase() + '!' + fromSheetCellID;
     if (!(fromID in this.dependencies)) return;
     this.dependencies[fromID].forEach(function(data) {
         this.sheets[data[0]].valueUpdates.off(data[1], data[2]);
