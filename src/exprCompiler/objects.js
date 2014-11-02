@@ -133,7 +133,7 @@ ExpressionNode.prototype.run = function(sheet) {
         case 'number':
         case 'string':
             return this.value;
-        case 'identifier': return parseNumMaybe(sheet.getCalculatedValueAtID(this.value)) || 0;
+        case 'identifier': return sheet.getCalculatedValueAtID(this.value);
         case 'sheetlookup': return this.content.run(sheet.getSheet(this.sheet));
         case 'binop_mult': return this.left.run(sheet) * this.right.run(sheet);
         case 'binop_div': return this.left.run(sheet) / this.right.run(sheet);
@@ -160,23 +160,31 @@ ExpressionNode.prototype.run = function(sheet) {
 };
 
 ExpressionNode.prototype.compile = function(sheet) {
+    function castNum(x) {
+        var compiled = x.compile();
+        if (x.compiledReturnType() === 'num') return compiled;
+        return 'parseFloat(' + compiled + ')';
+    }
+
     switch (this.type) {
         case 'boolean':
         case 'number':
         case 'string':
             return this.toString();
-        case 'identifier': return '(parseNumMaybe(sheet.getCalculatedValueAtID(' + this.value.compile() + ')) || 0)';
+        case 'identifier': return 'sheet.getCalculatedValueAtID("' + this.value + '")';
         case 'sheetlookup': return '(function(sheet){' + this.content.compile() + '}(sheet.getSheet("' + this.sheet + '")))';
         case 'binop_mult': return '(' + this.left.compile() + '*' + this.right.compile() + ')';
         case 'binop_div': return '(' + this.left.compile() + '/' + this.right.compile() + ')';
-        case 'binop_add': return '(parseFloat(' + this.left.compile() + ')+parseFloat(' + this.right.compile() + '))';
+        case 'binop_add':
+            if (this.right.type === '')
+            return '(' + castNum(this.left) + '+' + castNum(this.right) + ')';
         case 'binop_sub': return '(' + this.left.compile() + '-' + this.right.compile() + ')';
         case 'binop_concat': return '((' + this.left.compile() + ').toString()+(' + this.right.compile() + ').toString())';
         case 'binop_expon': return 'Math.pow(' + this.left.compile() + ', ' + this.right.compile() + ')';
-        case 'binop_comp_lt': return '(parseFloat(' + this.left.compile() + ') < parseFloat(' + this.right.compile() + '))';
-        case 'binop_comp_lte': return '(parseFloat(' + this.left.compile() + ') <= parseFloat(' + this.right.compile() + '))';
-        case 'binop_comp_gt': return '(parseFloat(' + this.left.compile() + ') > parseFloat(' + this.right.compile() + '))';
-        case 'binop_comp_gte': return '(parseFloat(' + this.left.compile() + ') >= parseFloat(' + this.right.compile() + '))';
+        case 'binop_comp_lt': return '(' + castNum(this.left) + ' < ' + castNum(this.right) + ')';
+        case 'binop_comp_lte': return '(' + castNum(this.left) + ' <= ' + castNum(this.right) + ')';
+        case 'binop_comp_gt': return '(' + castNum(this.left) + ' > ' + castNum(this.right) + ')';
+        case 'binop_comp_gte': return '(' + castNum(this.left) + ' >= ' + castNum(this.right) + ')';
         case 'binop_comp_eq': return '(' + this.left.compile() + '==' + this.right.compile() + ')';
         case 'binop_comp_neq': return '(' + this.left.compile() + '!=' + this.right.compile() + ')';
 
@@ -191,5 +199,32 @@ ExpressionNode.prototype.compile = function(sheet) {
         default:
             throw new TypeError('Cannot compile unknown expression nodes');
     }
+
+};
+
+ExpressionNode.prototype.compiledReturnType = function() {
+    switch (this.type) {
+        case 'boolean': return 'bool';
+        case 'number': return 'num';
+        case 'string': return 'str';
+        case 'identifier': return 'mixed';
+        case 'sheetlookup': return 'mixed';
+        case 'binop_mult': return 'num';
+        case 'binop_div': return 'num';
+        case 'binop_add': return 'num';
+        case 'binop_sub': return 'num';
+        case 'binop_concat': return 'str';
+        case 'binop_expon': return 'num';
+        case 'binop_comp_lt': return 'bool';
+        case 'binop_comp_lte': return 'bool';
+        case 'binop_comp_gt': return 'bool';
+        case 'binop_comp_gte': return 'bool';
+        case 'binop_comp_eq': return 'bool';
+        case 'binop_comp_neq': return 'bool';
+        case 'range': return 'arr';
+        case 'function': return 'mixed';
+    }
+
+    return 'mixed';
 
 };

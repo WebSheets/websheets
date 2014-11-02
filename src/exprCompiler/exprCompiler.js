@@ -1,7 +1,7 @@
 var TOKEN_BOOL = /^(true|false)/i;
 var TOKEN_STRING = /^"([^\\]|\\.)*"/i;
 var TOKEN_CELL_ID = /^(\$?)(\w+)(\$?)(\d+)/i;
-var TOKEN_NUM = /^\-?((([1-9][0-9]*\.|0\.)[0-9]+)|([1-9][0-9]*)|0)/;
+var TOKEN_NUM = /^((([1-9][0-9]*\.|0\.)[0-9]+)|([1-9][0-9]*)|0)/;
 var TOKEN_BINOP_TIMES = /^(\/|\*|\^)/;
 var TOKEN_BINOP_ADD = /^(\+|\-|&)/;
 var TOKEN_BINOP_COMP = /^(<>|=|>=|<=|<|>)/;
@@ -84,6 +84,13 @@ function parse(expression) {
 
     function parsePrimitive() {
         var accepted;
+        var negative = peek();
+        if (negative && negative.value === '-') {
+            negative = true;
+            pop();
+        } else {
+            negative = false;
+        }
         if (accepted = accept('boolean')) {
             return new ExpressionNode('boolean', {value: accepted.value === 'true'});
         } else if (accepted = accept('number')) {

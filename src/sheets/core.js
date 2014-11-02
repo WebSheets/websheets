@@ -144,7 +144,7 @@ WebSheet.prototype.getCalculatedValueAtID = function(id) {
 };
 
 WebSheet.prototype.getCalculatedValueAtPos = function(row, col) {
-    return (this.calculated[row] || [])[col] || (this.data[row] || [])[col];
+    return parseNumMaybe((this.calculated[row] || [])[col] || (this.data[row] || [])[col] || 0);
 };
 
 WebSheet.prototype.getValueAtPos = function(row, col) {
