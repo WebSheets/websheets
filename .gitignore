@@ -6,7 +6,6 @@ TAGS
 *.egg-info
 .emacs.desktop
 .#*
-build
 dist
 *~
 .buildout
