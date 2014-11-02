@@ -14,8 +14,16 @@ var TOKEN_COLON = /^:/;
 var TOKEN_PERCENT = /^%/;
 var TOKEN_WS = /^\s+/;
 
+var PARSED_CACHE_THRESHOLD = 10;
+
+var parsedExpressionCount = {};
+var parsedExpressionCache = {};
 
 function parse(expression) {
+    if (expression in parsedExpressionCache) {
+        return parsedExpressionCache[expression].clone();
+    }
+
     var lexIdx = 0;
     function lex() {
         var remainder = expression.substr(lexIdx);
@@ -219,6 +227,17 @@ function parse(expression) {
         return parseCompBinop();
     }
 
-    return parseExpression();
+    var output = parseExpression();
+
+    if (!(expression in parsedExpressionCount)) {
+        parsedExpressionCount[expression] = 1;
+    } else {
+        parsedExpressionCount[expression]++;
+        if (parsedExpressionCount[expression] >= PARSED_CACHE_THRESHOLD) {
+            parsedExpressionCache[expression] = output;
+        }
+    }
+
+    return output;
 
 }
