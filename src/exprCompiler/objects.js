@@ -134,11 +134,7 @@ ExpressionNode.prototype.run = function(sheet) {
         case 'string':
             return this.value;
         case 'identifier': return parseNumMaybe(sheet.getCalculatedValueAtID(this.value)) || 0;
-        case 'sheetlookup':
-            if (!sheet.context) throw new Error('Cross-sheet lookup in single-sheet context');
-            var newSheet = sheet.context.sheets[this.sheet.toUpperCase()];
-            if (!newSheet) return null;
-            return this.content.run(newSheet);
+        case 'sheetlookup': return this.content.run(sheet.getSheet(this.sheet));
         case 'binop_mult': return this.left.run(sheet) * this.right.run(sheet);
         case 'binop_div': return this.left.run(sheet) / this.right.run(sheet);
         case 'binop_add': return parseFloat(this.left.run(sheet)) + parseFloat(this.right.run(sheet));
@@ -160,5 +156,40 @@ ExpressionNode.prototype.run = function(sheet) {
     }
     if (this.type !== 'function') throw new TypeError('Unknown exression node');
     return execFunc(this.name, this.args);
+
+};
+
+ExpressionNode.prototype.compile = function(sheet) {
+    switch (this.type) {
+        case 'boolean':
+        case 'number':
+        case 'string':
+            return this.toString();
+        case 'identifier': return '(parseNumMaybe(sheet.getCalculatedValueAtID(' + this.value.compile() + ')) || 0)';
+        case 'sheetlookup': return '(function(sheet){' + this.content.compile() + '}(sheet.getSheet("' + this.sheet + '")))';
+        case 'binop_mult': return '(' + this.left.compile() + '*' + this.right.compile() + ')';
+        case 'binop_div': return '(' + this.left.compile() + '/' + this.right.compile() + ')';
+        case 'binop_add': return '(parseFloat(' + this.left.compile() + ')+parseFloat(' + this.right.compile() + '))';
+        case 'binop_sub': return '(' + this.left.compile() + '-' + this.right.compile() + ')';
+        case 'binop_concat': return '((' + this.left.compile() + ').toString()+(' + this.right.compile() + ').toString())';
+        case 'binop_expon': return 'Math.pow(' + this.left.compile() + ', ' + this.right.compile() + ')';
+        case 'binop_comp_lt': return '(parseFloat(' + this.left.compile() + ') < parseFloat(' + this.right.compile() + '))';
+        case 'binop_comp_lte': return '(parseFloat(' + this.left.compile() + ') <= parseFloat(' + this.right.compile() + '))';
+        case 'binop_comp_gt': return '(parseFloat(' + this.left.compile() + ') > parseFloat(' + this.right.compile() + '))';
+        case 'binop_comp_gte': return '(parseFloat(' + this.left.compile() + ') >= parseFloat(' + this.right.compile() + '))';
+        case 'binop_comp_eq': return '(' + this.left.compile() + '==' + this.right.compile() + ')';
+        case 'binop_comp_neq': return '(' + this.left.compile() + '!=' + this.right.compile() + ')';
+
+        case 'range':
+            var rangeCells = [];
+            iterateRangeNode(this, function(row, col) {
+                rangeCells.push('parseNumMaybe(sheet.getCalculatedValueAtPos(' + row + ', ' + col + '))');
+            });
+            return rangeCells.join(',');
+        case 'function':
+            return 'execFunc("' + this.name + '",[' + this.args.map(function(x) {return x.compile();}).join(',') + '])';
+        default:
+            throw new TypeError('Cannot compile unknown expression nodes');
+    }
 
 };

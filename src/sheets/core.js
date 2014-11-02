@@ -50,6 +50,13 @@ function WebSheet(elem, params) {
     this.name = null;
 }
 
+WebSheet.prototype.getSheet = function(name) {
+    if (!this.context) throw new Error('No context to extract sheet from');
+    name = name.toUpperCase();
+    if (!(name in this.context.sheets)) throw new Error('Undefined sheet requested');
+    return this.context.sheet[name];
+};
+
 WebSheet.prototype.getCell = function(id) {
     if (id in this.cellCache) return this.cellCache[id];
     return this.cellCache[id] = this.elem.querySelector('[data-id="' + id + '"]');
@@ -112,9 +119,7 @@ WebSheet.prototype.forceRerender = function() {
             cell.setAttribute('data-col', j);
 
             if (cell.value[0] === '=') {
-                workQueue.push(function(cell, i, j) {
-                    this.setValueAtPosition(i, j, cell.value, true);
-                }.bind(this, cell, i, j));
+                workQueue.push(this.setValueAtPosition.bind(this, i, j, cell.value, true));
             }
 
             cellFormatting = rowFormattingCache[j];
@@ -173,7 +178,7 @@ WebSheet.prototype.setValueAtPosition = function(row, col, value, force) {
 };
 
 WebSheet.prototype.calculateValueAtPosition = function(row, col, expression) {
-    if (!expression) return
+    if (!expression) return;
     var cellID = getCellID(row, col);
 
     // Parse the expression
@@ -265,4 +270,8 @@ WebSheet.prototype.loadData = function(data) {
         }
     }
     this.forceRerender();
+};
+
+WebSheet.parseExpression = function(expr) {
+    return parse(expr);
 };

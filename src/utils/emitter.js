@@ -1,15 +1,14 @@
-
 function Emitter() {
     var listeners = {};
     var allListeners = [];
 
     this.fire = function(name) {
-        for (var i = 0; i < allListeners.length; i++) {
+        var i;
+        for (i = 0; i < allListeners.length; i++) {
             allListeners[i].apply(null, arguments);
         }
         if (!(name in listeners)) return;
         var args = Array.prototype.slice.call(arguments, 1);
-        var i;
         for (i = 0; i < listeners[name].length; i++) {
             listeners[name][i].apply(null, args);
         }

@@ -32,11 +32,11 @@ registerDirectFunc(Math, 'tanh');
 
 registerDirectFunc(String, 'fromCharCode', 'char');
 
-function execFunc(name, args) {
+function execFunc(name, myArgs) {
     var args = [];
     var argTmp;
-    for (var argI = 0; argI < args.length; argI++) {
-        argTmp = args[argI].run(sheet);
+    for (var argI = 0; argI < myArgs.length; argI++) {
+        argTmp = myArgs[argI].run(sheet);
         if (argTmp && typeof argTmp === 'object') {
             args = args.concat(argTmp);
         } else {

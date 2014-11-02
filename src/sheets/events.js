@@ -79,6 +79,7 @@ WebSheet.prototype.onMousedown = function(e) {
 };
 WebSheet.prototype.onMouseup = function(e) {
     var target = e.target;
+    var i;
     var pos;
     var pos2;
     if (this.dragType && target.classList.contains('websheet-cell')) {
@@ -91,7 +92,6 @@ WebSheet.prototype.onMouseup = function(e) {
             this.clearCell(pos.row, pos.col);
             e.target.focus();
         } else if (this.dragType === DRAG_HANDLE && (pos.row === pos2.row || pos.col === pos2.col)) {
-            var i;
             var rawSource = this.getValueAtPos(pos.row, pos.col) || '';
             var parsedSource = rawSource[0] === '=' && parse(rawSource.substr(1));
             var tmp;
@@ -130,7 +130,7 @@ WebSheet.prototype.onMouseup = function(e) {
     this.dragSource = null;
 
     var existing = this.elem.querySelectorAll('.websheet-cell-hover');
-    for (var i = 0; i < existing.length; i++) {
+    for (i = 0; i < existing.length; i++) {
         existing[i].classList.remove('websheet-cell-hover');
     }
 };

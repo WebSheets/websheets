@@ -20,8 +20,9 @@ WebSheet.prototype.updateDependencies = function(cellID) {
 
     var dep;
 
+    var i;
     if (this.depUpdateQueue) {
-        for (var i = 0; i < deps.length; i++) {
+        for (i = 0; i < deps.length; i++) {
             if (this.depUpdateQueue.indexOf(deps[i]) !== -1) continue;
             this.depUpdateQueue.push(deps[i]);
         }
@@ -29,7 +30,7 @@ WebSheet.prototype.updateDependencies = function(cellID) {
     }
 
     this.depUpdateQueue = deps.concat([]); // Make a copy
-    for (var i = 0; i < deps.length; i++) {
+    for (i = 0; i < deps.length; i++) {
         this.depUpdateQueue.push(deps[i]);
     }
 
