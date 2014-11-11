@@ -30,3 +30,6 @@ function getCellPos(id) {
     cellPosCache[id] = output;
     return output;
 }
+
+WebSheet.getCellID = getCellID;
+WebSheet.getCellPos = getCellPos;

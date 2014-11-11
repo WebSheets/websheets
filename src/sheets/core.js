@@ -54,7 +54,7 @@ WebSheet.prototype.getSheet = function(name) {
     if (!this.context) throw new Error('No context to extract sheet from');
     name = name.toUpperCase();
     if (!(name in this.context.sheets)) throw new Error('Undefined sheet requested');
-    return this.context.sheet[name];
+    return this.context.sheets[name];
 };
 
 WebSheet.prototype.getCell = function(id) {
@@ -167,7 +167,7 @@ WebSheet.prototype.setValueAtPosition = function(row, col, value, force) {
 
     this.clearDependants(cellID);
 
-    this.valueUpdates.fire(cellID, value, 'value');
+    this.valueUpdates.fire(cellID, value);
 
     if (value[0] === '=') {
         this.calculateValueAtPosition(row, col, value.substr(1));
@@ -243,7 +243,7 @@ WebSheet.prototype.calculateValueAtPosition = function(row, col, expression) {
 
     if (wasUpdated) {
         this.updateDependencies(cellID);
-        this.calculatedUpdates.fire(cellID, value, 'calculated');
+        this.calculatedUpdates.fire(cellID, value);
     }
 };
 

@@ -20,10 +20,7 @@ function Emitter() {
         listeners[name].push(listener);
     };
     var onAll = this.onAll = function(listener) {
-        if (!(name in listeners)) {
-            listeners[name] = [];
-        }
-        listeners[name].push(listener);
+        allListeners.push(listener);
     };
     var off = this.off = function(name, listener) {
         if (!(name in listeners)) return;

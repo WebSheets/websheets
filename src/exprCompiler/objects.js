@@ -155,7 +155,7 @@ ExpressionNode.prototype.run = function(sheet) {
             return rangeCells;
     }
     if (this.type !== 'function') throw new TypeError('Unknown exression node');
-    return execFunc(this.name, this.args);
+    return execFunc(this.name, this.args, sheet);
 
 };
 
@@ -195,7 +195,7 @@ ExpressionNode.prototype.compile = function(sheet) {
             });
             return rangeCells.join(',');
         case 'function':
-            return 'execFunc("' + this.name + '",[' + this.args.map(function(x) {return x.compile();}).join(',') + '])';
+            return 'execFunc("' + this.name + '",[' + this.args.map(function(x) {return x.compile();}).join(',') + '], sheet)';
         default:
             throw new TypeError('Cannot compile unknown expression nodes');
     }

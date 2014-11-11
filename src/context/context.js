@@ -1,11 +1,27 @@
 function WebSheetContext() {
     this.sheets = {};
     this.dependencies = {};
+
+    this.events = new Emitter();
 }
 
 WebSheetContext.prototype.register = function(sheet, name) {
     this.sheets[name.toUpperCase()] = sheet;
     sheet.name = name;
+
+    sheet.valueUpdates.onAll(function(cellID, value) {
+        this.events.fire('value', name, cellID, value);
+    }.bind(this));
+
+    sheet.calculatedUpdates.onAll(function(cellID, value) {
+        this.events.fire('calculated', name, cellID, value);
+    }.bind(this));
+};
+
+WebSheetContext.prototype.getSheet = function(sheetName) {
+    sheetName = sheetName.toUpperCase();
+    if (!(sheetName in this.sheets)) return null;
+    return this.sheets[sheetName]
 };
 
 WebSheetContext.prototype.lookup = function(sheetName, cellID) {

@@ -32,7 +32,7 @@ registerDirectFunc(Math, 'tanh');
 
 registerDirectFunc(String, 'fromCharCode', 'char');
 
-function execFunc(name, myArgs) {
+function execFunc(name, myArgs, sheet) {
     var args = [];
     var argTmp;
     for (var argI = 0; argI < myArgs.length; argI++) {
