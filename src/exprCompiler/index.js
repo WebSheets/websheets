@@ -1,25 +1,29 @@
-var TOKEN_BOOL = /^(true|false)/i;
-var TOKEN_STRING = /^"([^\\]|\\.)*"/i;
-var TOKEN_CELL_ID = /^(\$?)(\w+)(\$?)(\d+)/i;
-var TOKEN_NUM = /^((([1-9][0-9]*\.|0\.)[0-9]+)|([1-9][0-9]*)|0)/;
-var TOKEN_BINOP_TIMES = /^(\/|\*|\^)/;
-var TOKEN_BINOP_ADD = /^(\+|\-|&)/;
-var TOKEN_BINOP_COMP = /^(<>|=|>=|<=|<|>)/;
-var TOKEN_FOPEN = /^(\w+)\(/;
-var TOKEN_XSOPEN = /^(\w+)!/;
-var TOKEN_RPAREN = /^\)/;
-var TOKEN_LPAREN = /^\(/;
-var TOKEN_COMMA = /^,/;
-var TOKEN_COLON = /^:/;
-var TOKEN_PERCENT = /^%/;
-var TOKEN_WS = /^\s+/;
+import ExpressionToken from './ExpressionToken';
+import ExpressionNode from './ExpressionNode';
 
-var PARSED_CACHE_THRESHOLD = 10;
 
-var parsedExpressionCount = {};
-var parsedExpressionCache = {};
+const TOKEN_BOOL = /^(true|false)/i;
+const TOKEN_STRING = /^"([^\\]|\\.)*"/i;
+const TOKEN_CELL_ID = /^(\$?)(\w+)(\$?)(\d+)/i;
+const TOKEN_NUM = /^((([1-9][0-9]*\.|0\.)[0-9]+)|([1-9][0-9]*)|0)/;
+const TOKEN_BINOP_TIMES = /^(\/|\*|\^)/;
+const TOKEN_BINOP_ADD = /^(\+|\-|&)/;
+const TOKEN_BINOP_COMP = /^(<>|=|>=|<=|<|>)/;
+const TOKEN_FOPEN = /^(\w+)\(/;
+const TOKEN_XSOPEN = /^(\w+)!/;
+const TOKEN_RPAREN = /^\)/;
+const TOKEN_LPAREN = /^\(/;
+const TOKEN_COMMA = /^,/;
+const TOKEN_COLON = /^:/;
+const TOKEN_PERCENT = /^%/;
+const TOKEN_WS = /^\s+/;
 
-function parse(expression) {
+const PARSED_CACHE_THRESHOLD = 10;
+
+const parsedExpressionCount = {};
+const parsedExpressionCache = {};
+
+export default function parse(expression) {
     if (expression in parsedExpressionCache) {
         return parsedExpressionCache[expression].clone();
     }
@@ -62,7 +66,7 @@ function parse(expression) {
         } else if (matches = TOKEN_COLON.exec(remainder)) {
             output = new ExpressionToken('colon', ':');
         } else {
-            throw new SyntaxError('Unknown token: ' + remainder);
+            throw new SyntaxError(`Unknown token: ${remainder}`);
         }
         if (matches) {
             lexIdx += matches[0].length;
@@ -86,7 +90,9 @@ function parse(expression) {
     }
     function assert(type) {
         var popped = pop();
-        if (popped.type !== type) throw new SyntaxError('Expected ' + type + ', got ' + popped.type);
+        if (popped.type !== type) {
+            throw new SyntaxError(`Expected ${type}, got ${popped.type}`);
+        }
         return popped;
     }
 
@@ -102,8 +108,8 @@ function parse(expression) {
         if (accepted = accept('boolean')) {
             return new ExpressionNode('boolean', {value: accepted.value === 'true'});
         } else if (accepted = accept('number')) {
-            var raw = accepted.value;
-            var tmp = parseFloat(accepted.value);
+            let raw = accepted.value;
+            let tmp = parseFloat(accepted.value);
             if (accept('percent')) {
                 raw += '%';
                 tmp /= 100;
@@ -112,22 +118,22 @@ function parse(expression) {
         } else if (accepted = accept('string')) {
             return new ExpressionNode('string', {value: accepted.value});
         } else if (accepted = accept('ident')) {
-            var rematched = TOKEN_CELL_ID.exec(accepted.value);
+            let rematched = TOKEN_CELL_ID.exec(accepted.value);
             return new ExpressionNode('identifier', {
                 value: rematched[2] + rematched[4],
                 pinRow: rematched[3] === '$',
                 pinCol: rematched[1] === '$',
                 raw: accepted.value,
             });
-        } else {
-            throw new SyntaxError('Unrecognized primitive value');
         }
+
+        throw new SyntaxError('Unrecognized primitive value');
     }
     function parseRange() {
         var base = parsePrimitive();
         if (!base || base.type !== 'identifier') return base;
         if (accept('colon')) {
-            var end = assert('ident');
+            let end = assert('ident');
             base = new ExpressionNode('range', {
                 start: base,
                 end: new ExpressionNode('identifier', {value: end.value})
@@ -148,7 +154,7 @@ function parse(expression) {
         }
         return new ExpressionNode('function', {
             name: funcName.value,
-            args: args,
+            args,
         });
     }
     function parseSheetRef() {
@@ -190,8 +196,11 @@ function parse(expression) {
             return lval;
         }
         return new ExpressionNode(
-            peeked.value === '+' ? 'binop_add' :
-                (peeked.value === '&' ? 'binop_concat' : 'binop_sub'),
+            peeked.value === '+' ?
+                'binop_add' :
+                (peeked.value === '&' ?
+                    'binop_concat' :
+                    'binop_sub'),
             {
                 left: lval,
                 operator: peeked.value,
@@ -240,4 +249,4 @@ function parse(expression) {
 
     return output;
 
-}
+};

@@ -1,36 +1,47 @@
-WebSheet.prototype.initEvents = function() {
-    unlisten(this.elem, 'focus');
-    listen(this.elem, 'focus', this.onFocus.bind(this));
-    unlisten(this.elem, 'blur');
-    listen(this.elem, 'blur', this.onBlur.bind(this));
-    unlisten(this.elem, 'keyup');
-    listen(this.elem, 'keyup', this.onKeyup.bind(this));
-    unlisten(this.elem, 'keydown');
-    listen(this.elem, 'keydown', this.onKeydown.bind(this));
+import {getCellID, getCellPos} from './utils/cellID';
+import {listen, unlisten} from './utils/events';
+import {DRAG_HANDLE, DRAG_MOVE, DRAG_NONE} from './constants';
 
-    unlisten(this.elem, 'mousedown');
-    listen(this.elem, 'mousedown', this.onMousedown.bind(this));
-    unlisten(this.elem, 'mouseup');
-    listen(this.elem, 'mouseup', this.onMouseup.bind(this));
-    unlisten(this.elem, 'mouseover');
-    listen(this.elem, 'mouseover', this.onMouseover.bind(this));
+
+export function unbindEvents(self) {
+    unlisten(self.elem, 'focus');
+    unlisten(self.elem, 'blur');
+    unlisten(self.elem, 'keyup');
+    unlisten(self.elem, 'keydown');
+    unlisten(self.elem, 'mousedown');
+    unlisten(self.elem, 'mouseup');
+    unlisten(self.elem, 'mouseover');
+};
+export function initEvents(self) {
+    unbindEvents(self);
+    var {elem} = self;
+    listen(elem, 'focus', onFocus.bind(self));
+    listen(elem, 'blur', onBlur.bind(self));
+    listen(elem, 'keyup', onKeyup.bind(self));
+    listen(elem, 'keydown', onKeydown.bind(self));
+
+    listen(elem, 'mousedown', onMousedown.bind(self));
+    listen(elem, 'mouseup', onMouseup.bind(self));
+    listen(elem, 'mouseover', onMouseover.bind(self));
 };
 
-WebSheet.prototype.onFocus = function(e) {
+export function onFocus(e) {
     var row = e.target.getAttribute('data-row') | 0;
     var col = e.target.getAttribute('data-col') | 0;
     e.target.value = (this.data[row] || [])[col] || '';
     e.target.select(0, e.target.value.length);
     e.target.parentNode.className = 'websheet-cell-wrapper websheet-has-focus';
 };
-WebSheet.prototype.onBlur = function(e) {
+export function onBlur(e) {
     var row = e.target.getAttribute('data-row') | 0;
     var col = e.target.getAttribute('data-col') | 0;
     this.setValueAtPosition(row, col, e.target.value);
-    if (this.calculated[row] && col in this.calculated[row]) e.target.value = this.calculated[row][col];
+    if (this.calculated[row] && col in this.calculated[row]) {
+        e.target.value = this.calculated[row][col];
+    }
     e.target.parentNode.className = 'websheet-cell-wrapper';
 };
-WebSheet.prototype.onKeydown = function(e) {
+export function onKeydown(e) {
     var next;
     if (e.keyCode === 37 && e.target.selectionStart === 0) {
         next = this.getCell(e.target.getAttribute('data-id-prev-col'));
@@ -42,27 +53,27 @@ WebSheet.prototype.onKeydown = function(e) {
         e.preventDefault();
     }
 };
-WebSheet.prototype.onKeyup = function(e) {
+export function onKeyup(e) {
     var next;
     if (e.keyCode === 13 || e.keyCode === 40) {
         next = this.getCell(e.target.getAttribute('data-id-next-row'));
     } else if (e.keyCode === 38) {
         next = this.getCell(e.target.getAttribute('data-id-prev-row'));
     }
-    if (next) next.focus();
+    if (next) {
+        next.focus();
+    }
 };
-WebSheet.prototype.onMousedown = function(e) {
-    var target = e.target;
-    var id;
-    var pos;
+export function onMousedown(e) {
+    var {target} = e;
     if (!target.classList.contains('websheet-has-focus')) {
         return;
     }
 
     e.preventDefault();
 
-    id = this.dragSource = target.firstChild.getAttribute('data-id');
-    pos = getCellPos(id);
+    var id = this.dragSource = target.firstChild.getAttribute('data-id');
+    var pos = getCellPos(id);
 
     // Assign the value of the currently focused cell's input to the cell, just
     // incase it changed and hasn't been updated on the blur event.
@@ -77,65 +88,66 @@ WebSheet.prototype.onMousedown = function(e) {
     this.dragType = DRAG_MOVE;
     this.elem.className += ' websheet-grabbing';
 };
-WebSheet.prototype.onMouseup = function(e) {
-    var target = e.target;
-    var i;
-    var pos;
-    var pos2;
-    if (this.dragType && target.classList.contains('websheet-cell')) {
-        pos = getCellPos(this.dragSource);
-        pos2 = getCellPos(target.getAttribute('data-id'));
+export function onMouseup(e) {
+    var {target} = e;
 
+    if (this.dragType !== DRAG_NONE &&
+        target.classList.contains('websheet-cell')) {
+
+        let pos = getCellPos(this.dragSource);
+        let pos2 = getCellPos(target.getAttribute('data-id'));
 
         if (this.dragType === DRAG_MOVE) {
             this.setValueAtPosition(pos2.row, pos2.col, this.getValueAtPos(pos.row, pos.col) || '');
             this.clearCell(pos.row, pos.col);
             e.target.focus();
+
         } else if (this.dragType === DRAG_HANDLE && (pos.row === pos2.row || pos.col === pos2.col)) {
             var rawSource = this.getValueAtPos(pos.row, pos.col) || '';
             var parsedSource = rawSource[0] === '=' && parse(rawSource.substr(1));
-            var tmp;
-            var min;
+
             if (pos.row === pos2.row) {
-                min = Math.min(pos.col, pos2.col);
-                for (i = min; i <= Math.max(pos.col, pos2.col); i++) {
+                let min = Math.min(pos.col, pos2.col);
+                for (let i = min; i <= Math.max(pos.col, pos2.col); i++) {
                     if (i === pos.col) continue;
                     if (parsedSource) {
-                        tmp = parsedSource.clone();
+                        let tmp = parsedSource.clone();
                         tmp.adjust(0, i - min);
                         this.setValueAtPosition(pos.row, i, '=' + tmp.toString());
                     } else {
                         this.setValueAtPosition(pos.row, i, rawSource);
                     }
                 }
+
             } else if (pos.col === pos2.col) {
-                min = Math.min(pos.row, pos2.row);
-                for (i = min; i <= Math.max(pos.row, pos2.row); i++) {
+                let min = Math.min(pos.row, pos2.row);
+                for (let i = min; i <= Math.max(pos.row, pos2.row); i++) {
                     if (i === pos.row) continue;
                     if (parsedSource) {
-                        tmp = parsedSource.clone();
+                        let tmp = parsedSource.clone();
                         tmp.adjust(i - min, 0);
                         this.setValueAtPosition(i, pos.col, '=' + tmp.toString());
                     } else {
                         this.setValueAtPosition(i, pos.col, rawSource);
                     }
                 }
+
             } else {
                 console.error('Cannot drag handle diagonally');
             }
         }
     }
     this.elem.className = 'websheet';
-    this.dragType = 0;
+    this.dragType = DRAG_NONE;
     this.dragSource = null;
 
     var existing = this.elem.querySelectorAll('.websheet-cell-hover');
-    for (i = 0; i < existing.length; i++) {
+    for (let i = 0; i < existing.length; i++) {
         existing[i].classList.remove('websheet-cell-hover');
     }
 };
-WebSheet.prototype.onMouseover = function(e) {
-    if (!this.dragType) return;
+export function onMouseover(e) {
+    if (this.dragType === DRAG_NONE) return;
     if (!e.target.classList.contains('websheet-cell')) return;
 
     var toRemoveClassFrom = [];
@@ -151,23 +163,23 @@ WebSheet.prototype.onMouseover = function(e) {
     }
 
     if (this.dragType === DRAG_HANDLE) {
-        var destPos = getCellPos(targetID);
-        var srcPos = getCellPos(this.dragSource);
-        var tmp;
-        var trcfTmp;
+        let destPos = getCellPos(targetID);
+        let srcPos = getCellPos(this.dragSource);
         if (destPos.col === srcPos.col) {
-            for (i = Math.min(srcPos.row, destPos.row); i <= Math.max(srcPos.row, destPos.row); i++) {
-                tmp = getCellID(i, srcPos.col);
-                if ((trcfTmp = toRemoveClassFrom.indexOf(tmp)) !== -1) {
+            for (let i = Math.min(srcPos.row, destPos.row); i <= Math.max(srcPos.row, destPos.row); i++) {
+                let tmp = getCellID(i, srcPos.col);
+                let trcfTmp = toRemoveClassFrom.indexOf(tmp);
+                if (trcfTmp !== -1) {
                     toRemoveClassFrom.splice(trcfTmp, 1);
                 } else {
                     this.getCell(tmp).parentNode.classList.add('websheet-cell-hover');
                 }
             }
         } else if (destPos.row === srcPos.row) {
-            for (i = Math.min(srcPos.col, destPos.col); i <= Math.max(srcPos.col, destPos.col); i++) {
-                tmp = getCellID(srcPos.row, i);
-                if ((trcfTmp = toRemoveClassFrom.indexOf(tmp)) !== -1) {
+            for (let i = Math.min(srcPos.col, destPos.col); i <= Math.max(srcPos.col, destPos.col); i++) {
+                let tmp = getCellID(srcPos.row, i);
+                let trcfTmp = toRemoveClassFrom.indexOf(tmp);
+                if (trcfTmp !== -1) {
                     toRemoveClassFrom.splice(trcfTmp, 1);
                 } else {
                     this.getCell(tmp).parentNode.classList.add('websheet-cell-hover');
@@ -178,7 +190,7 @@ WebSheet.prototype.onMouseover = function(e) {
         e.target.parentNode.classList.add('websheet-cell-hover');
     }
 
-    toRemoveClassFrom.forEach(function(id) {
+    toRemoveClassFrom.forEach(id => {
         this.getCell(id).parentNode.classList.remove('websheet-cell-hover');
-    }, this);
+    });
 };

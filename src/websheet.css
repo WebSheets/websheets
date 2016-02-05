@@ -59,7 +59,7 @@
     width: 100%;
 }
 .websheet-cell:focus {
-    border: 1px solid rgb(51, 153, 255);
+    border: 0 solid rgb(51, 153, 255);
     box-shadow: 0 0 0 7px rgba(51, 153, 255, 0.85);
     outline: none;
 }

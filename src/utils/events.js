@@ -1,13 +1,17 @@
-function listen(elem, event, cb) {
-    elem.listeners = elem.listeners || {};
-    elem.listeners[event] = elem.listeners[event] || [];
-    elem.listeners[event].push(cb);
+const LISTENERS = Symbol('websheets listeners');
+
+export function listen(elem, event, cb) {
+    if (!(LISTENERS in elem)) {
+        elem[LISTENERS] = {};
+    }
+    elem[LISTENERS][event] = elem[LISTENERS][event] || [];
+    elem[LISTENERS][event].push(cb);
 
     elem.addEventListener(event, cb, elem !== window);
-}
-function unlisten(elem, event) {
-    if (!elem.listeners || !elem.listeners[event]) return;
-    elem.listeners[event].forEach(function(listener) {
+};
+export function unlisten(elem, event) {
+    if (!elem[LISTENERS] || !elem[LISTENERS][event]) return;
+    elem[LISTENERS][event].forEach(listener => {
         elem.removeEventListener(event, listener, elem !== window);
     });
-}
+};
