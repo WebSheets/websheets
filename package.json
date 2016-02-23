@@ -7,15 +7,17 @@
     "babel-loader": "^6.2.1",
     "babel-polyfill": "^6.3.14",
     "babel-preset-es2015": "^6.3.13",
-    "babel-register": "^6.4.3",
+    "babel-require": "^1.0.1",
     "css-loader": "^0.23.1",
     "extract-text-webpack-plugin": "^1.0.1",
+    "mocha": "^2.4.5",
     "style-loader": "^0.13.0",
     "webpack": "^1.12.12"
   },
   "scripts": {
     "build": "./node_modules/.bin/babel src --out-dir build --source-maps --no-babelrc --presets es2015",
     "prepublish": "rm -rf build/* && npm run build ",
+    "test": "./node_modules/.bin/mocha --recursive",
     "watch": "fswatch -0 src | xargs -0 -n 1 -I {} npm run web",
     "web": "./node_modules/.bin/webpack --config=webpack.config.js --progress"
   },

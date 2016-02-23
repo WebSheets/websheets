@@ -39,32 +39,46 @@ export default function parse(expression) {
             return lex();
         } else if (matches = TOKEN_BOOL.exec(remainder)) {
             output = new ExpressionToken('boolean', matches[0].toLowerCase());
+
         } else if (matches = TOKEN_STRING.exec(remainder)) {
             output = new ExpressionToken('string', JSON.parse(matches[0]));
+
         } else if (matches = TOKEN_NUM.exec(remainder)) {
             output = new ExpressionToken('number', matches[0]);
+
         } else if (matches = TOKEN_FOPEN.exec(remainder)) {
             output = new ExpressionToken('funcopen', matches[1]);
+
         } else if (matches = TOKEN_XSOPEN.exec(remainder)) {
             output = new ExpressionToken('sheetref', matches[1]);
+
         } else if (matches = TOKEN_CELL_ID.exec(remainder)) {
             output = new ExpressionToken('ident', matches[0].toUpperCase());
+
         } else if (matches = TOKEN_RPAREN.exec(remainder)) {
             output = new ExpressionToken('rparen', ')');
+
         } else if (matches = TOKEN_LPAREN.exec(remainder)) {
             output = new ExpressionToken('lparen', '(');
+
         } else if (matches = TOKEN_BINOP_TIMES.exec(remainder)) {
             output = new ExpressionToken('binop_times', matches[0]);
+
         } else if (matches = TOKEN_BINOP_ADD.exec(remainder)) {
             output = new ExpressionToken('binop_add', matches[0]);
+
         } else if (matches = TOKEN_BINOP_COMP.exec(remainder)) {
             output = new ExpressionToken('binop_comp', matches[0]);
+
         } else if (matches = TOKEN_COMMA.exec(remainder)) {
             output = new ExpressionToken('comma', ',');
+
         } else if (matches = TOKEN_PERCENT.exec(remainder)) {
             output = new ExpressionToken('percent', '%');
+
         } else if (matches = TOKEN_COLON.exec(remainder)) {
             output = new ExpressionToken('colon', ':');
+
         } else {
             throw new SyntaxError(`Unknown token: ${remainder}`);
         }
@@ -140,6 +154,16 @@ export default function parse(expression) {
             });
         }
         return base;
+    }
+    function parseUnary() {
+        var op = accept('binop_add');
+        if (!op) {
+            return parseRange();
+        }
+        return new ExpressionNode('unary', {
+            operator: op,
+            base: parseSheetRef(),
+        });
     }
     function parseFunc() {
         var funcName = accept('funcopen');
