@@ -14,9 +14,12 @@
     "webpack": "^1.12.12"
   },
   "scripts": {
-    "build": "./node_modules/.bin/webpack --config=webpack.config.js --progress",
-    "dev": "fswatch -0 src | xargs -0 -n 1 -I {} npm run build"
+    "build": "./node_modules/.bin/babel src --out-dir build --source-maps --no-babelrc --presets es2015",
+    "prepublish": "rm -rf build/* && npm run build && cp -a src/compiler/static build/compiler/static",
+    "watch": "fswatch -0 src | xargs -0 -n 1 -I {} npm run web",
+    "web": "./node_modules/.bin/webpack --config=webpack.config.js --progress"
   },
+  "main": "index.js",
   "repository": {
     "type": "git",
     "url": "https://github.com/mattbasta/websheets.git"

@@ -1,10 +1,11 @@
 <html>
 <head>
   <title>Websheets Demo</title>
+  <link rel="stylesheet" href="src/websheet.css" />
 </head>
 <body>
   <div class="websheet"></div>
-  <script src="build/src/websheet.min.js"></script>
+  <script src="dist/src/websheet.min.js"></script>
   <script>
     var sheet = new WebSheet(document.querySelector('.websheet'));
     sheet.forceRerender();

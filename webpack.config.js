@@ -13,7 +13,7 @@ module.exports = {
         app: ['./src/index.js']
     },
     output: {
-        path: path.resolve(__dirname, 'build', 'src'),
+        path: path.resolve(__dirname, 'dist', 'src'),
         publicPath: '/',
         filename: '/websheet.min.js',
         library: 'WebSheet',

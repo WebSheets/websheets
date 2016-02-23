@@ -1,5 +1,3 @@
-import './websheet.css';
-
 import parseExpression from './exprCompiler';
 import WebSheet from './WebSheet';
 import WebSheetContext from './WebSheetContext';
