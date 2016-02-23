@@ -22,6 +22,27 @@ export default class WebSheetContext {
         });
     }
 
+    unregister(sheet, name) {
+        if (this.sheets[name] !== sheet) {
+            throw new Error('Unxpected unregistration');
+        }
+        delete this.sheets[name];
+
+        Object.keys(this.dependencies).forEach(dep => {
+            const [sheetName, id] = dep.split(/!/);
+            if (sheetName === name) {
+                this.clearDependencies(name, id);
+                delete this.dependencies[dep];
+                return;
+            }
+
+        });
+
+        // FIXME: The above only unregisters outbound dependencies, not
+        // inbound ones.
+
+    }
+
     getSheet(sheetName) {
         sheetName = sheetName.toUpperCase();
         if (!this.sheets.hasOwnProperty(sheetName)) return null;
@@ -37,6 +58,7 @@ export default class WebSheetContext {
     setDependency(fromSheet, fromSheetCellID, toSheetName, toCellID, cb) {
         toSheetName = toSheetName.toUpperCase();
         if (!this.sheets.hasOwnProperty(sheetName)) return;
+
         var fromID = `${fromSheet.name.toUpperCase()}!${fromSheetCellID}`;
         var toID = `${toSheetName}!${toCellID}`;
         this.dependencies[fromID] = this.dependencies[fromID] || [];
@@ -62,4 +84,5 @@ export default class WebSheetContext {
         });
         this.dependencies[fromID] = [];
     }
-}
+
+};

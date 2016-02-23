@@ -141,7 +141,7 @@ export default function parse(expression) {
             });
         }
 
-        throw new SyntaxError('Unrecognized primitive value');
+        throw new SyntaxError(`Unrecognized primitive value: ${peek()}`);
     }
     function parseRange() {
         var base = parsePrimitive();

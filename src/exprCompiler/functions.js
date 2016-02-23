@@ -209,6 +209,8 @@ export default function execFunc(name, myArgs, sheet) {
             tmp = args.map(parseNumAlways);
             tmp2 = tmp.reduce(add) / tmp.length;
             return tmp.map(x => Math.pow(x - tmp2, 2)).reduce(add) / tmp.length;
+        case 'iferror':
+            return args[0] === '#ERROR!' ? args[1] : args[0];
     }
 };
 
