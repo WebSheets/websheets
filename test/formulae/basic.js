@@ -14,6 +14,9 @@ describe('Formulae', () => {
     it('should parse exponents with the correct precedence', () => {
         assert.equal(compiler('2^4*100').run(null), 1600);
     });
+    it('should parse chains of additions', () => {
+        assert.equal(compiler('1+1+1+1+1').run(null), 5);
+    });
 
     it('should parse functions', () => {
         const r = new Runner({

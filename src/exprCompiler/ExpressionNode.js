@@ -30,6 +30,12 @@ export default class ExpressionNode {
             case 'binop_sub':
             case 'binop_concat':
             case 'binop_expon':
+            case 'binop_comp_lt':
+            case 'binop_comp_lte':
+            case 'binop_comp_gt':
+            case 'binop_comp_gte':
+            case 'binop_comp_eq':
+            case 'binop_comp_neq':
                 this.left.walk(cb);
                 this.right.walk(cb);
         }
@@ -63,6 +69,13 @@ export default class ExpressionNode {
                 return `${this.left}&${this.right}`;
             case 'binop_expon':
                 return `${this.left}^${this.right}`;
+            case 'binop_comp_lt':
+            case 'binop_comp_lte':
+            case 'binop_comp_gt':
+            case 'binop_comp_gte':
+            case 'binop_comp_eq':
+            case 'binop_comp_neq':
+                return `${this.left}${this.operator}${this.right}`;
         }
     }
 
@@ -103,6 +116,20 @@ export default class ExpressionNode {
                     this.type,
                     {left: this.left.clone(), right: this.right.clone()}
                 );
+            case 'binop_comp_lt':
+            case 'binop_comp_lte':
+            case 'binop_comp_gt':
+            case 'binop_comp_gte':
+            case 'binop_comp_eq':
+            case 'binop_comp_neq':
+                return new ExpressionNode(
+                    this.type,
+                    {
+                        left: this.left.clone(),
+                        operator: this.operator,
+                        right: this.right.clone()
+                    }
+                );
         }
     }
 
@@ -117,7 +144,6 @@ export default class ExpressionNode {
             x.raw = (x.pinCol ? '$' : '') + rematched[2] + (x.pinRow ? '$' : '') + rematched[4];
         });
     }
-
 
 
     findCellDependencies(cb) {

@@ -240,7 +240,7 @@ export default function parse(expression) {
         if (!peeked) {
             return lval;
         }
-        return parseTimesBinop(
+        return parseAddBinop(
             new ExpressionNode(
                 peeked.value === '+' ?
                     'binop_add' :

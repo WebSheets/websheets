@@ -25,10 +25,10 @@ export default class Emitter {
         this.allListeners.push(listener);
     }
     off(name, listener) {
-        if (!(name in listeners)) return;
-        var idx = listeners[name].indexOf(listener);
+        if (!(name in this.listeners)) return;
+        var idx = this.listeners[name].indexOf(listener);
         if (idx === -1) return;
-        listeners[name].splice(idx, 1);
+        this.listeners[name].splice(idx, 1);
     }
     offAll(listener) {
         var idx = this.allListeners.indexOf(listener);

@@ -29,8 +29,8 @@ export default class WebSheet {
         Object.assign(this, defaultParams, params);
 
         this.columnWidths = [];
-        for (let i = 0; i < params.width; i++) {
-            this.columnWidths[i] = DEFAULT_COLUMN_WIDTH;
+        for (let i = 0; i < this.width; i++) {
+            this.columnWidths.push(DEFAULT_COLUMN_WIDTH);
         }
 
         this.data = [];
@@ -49,7 +49,7 @@ export default class WebSheet {
         this.valueUpdates = new Emitter();
         this.calculatedUpdates = new Emitter();
 
-        if (params.noBrowser) {
+        if (this.noBrowser) {
             return;
         }
 
