@@ -23,4 +23,18 @@ describe('WebSheet', () => {
         });
 
     });
+    describe('getCalculatedValueAtID', () => {
+
+        it('should deal with calculated values that are falsey but not nullish', () => {
+            const sheet = new WebSheet({}, {noBrowser: true});
+            sheet.loadData([
+                [
+                    '=10-10',
+                    '=A1+123',
+                ]
+            ]);
+            assert.equal(sheet.getCalculatedValueAtID('b1'), 123);
+        });
+
+    });
 });

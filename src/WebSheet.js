@@ -260,11 +260,20 @@ export default class WebSheet {
     }
 
     getCalculatedValueAtPos(row, col) {
-        return parseNumMaybe(
-            (this.calculated[row] || [])[col] ||
-            (this.data[row] || [])[col] ||
-            0
-        );
+        if (row in this.calculated) {
+            let data = this.calculated[row][col];
+            if (data !== null && typeof data !== 'undefined') {
+                return parseNumMaybe(data);
+            }
+        }
+        if (row in this.data) {
+            let data = this.data[row][col];
+            if (data !== null && typeof data !== 'undefined') {
+                return parseNumMaybe(data);
+            }
+        }
+
+        return 0;
     }
 
     getCell(id) {
