@@ -63,17 +63,21 @@ export default class WebSheet {
         });
     }
 
-    addColumn() {
+    addColumn(rerender = true) {
         this.width += 1;
         this.columnWidths.push(DEFAULT_COLUMN_WIDTH);
-        this.forceRerender();
+        if (rerender) {
+            this.forceRerender();
+        }
     }
-    addRow() {
+    addRow(rerender = true) {
         this.height += 1;
         this.data.push(new Array(this.width));
         this.calculated.push(new Array(this.width));
         this.formatting.push(new Array(this.width));
-        this.forceRerender();
+        if (rerender) {
+            this.forceRerender();
+        }
     }
 
     calculateValueAtPosition(row, col, expression) {
@@ -299,8 +303,8 @@ export default class WebSheet {
     }
 
     loadData(data) {
-        while (this.height < data.length) this.addRow();
-        while (this.width < data[0].length) this.addColumn();
+        while (this.height < data.length) this.addRow(false);
+        while (this.width < data[0].length) this.addColumn(false);
 
         for (var i = 0; i < data.length; i++) {
             this.data[i] = this.data[i] || [];
