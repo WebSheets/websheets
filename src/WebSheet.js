@@ -222,7 +222,7 @@ export default class WebSheet {
 
                 row.appendChild(cellWrapper);
 
-                cell.value = rowCalculatedCache[j] || rowDataCache[j] || '';
+                cell.value = this.getCalculatedValueAtPos(i, j);
                 cell.setAttribute('data-id', cell.title = getCellID(i, j));
                 cell.setAttribute('data-id-prev-col', getCellID(i, j - 1));
                 cell.setAttribute('data-id-prev-row', getCellID(i - 1, j));
