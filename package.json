@@ -38,5 +38,8 @@
   "bugs": {
     "url": "https://github.com/mattbasta/websheets/issues"
   },
-  "homepage": "https://github.com/mattbasta/websheets"
+  "homepage": "https://github.com/mattbasta/websheets",
+  "dependencies": {
+    "formulajs": "^1.0.6"
+  }
 }

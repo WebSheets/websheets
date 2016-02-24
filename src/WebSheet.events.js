@@ -37,7 +37,10 @@ export function onBlur(e) {
     var col = e.target.getAttribute('data-col') | 0;
     this.setValueAtPosition(row, col, e.target.value);
     if (this.calculated[row] && col in this.calculated[row]) {
-        e.target.value = this.calculated[row][col];
+        e.target.value = this.formatValue(
+            getCellID(row, col),
+            this.calculated[row][col]
+        );
     }
     e.target.parentNode.className = 'websheet-cell-wrapper';
 };

@@ -88,16 +88,7 @@ export default class WebSheet {
         var parsed = parseExpression(expression);
 
         // Evaluate the expression to find a value
-        var value;
-        try {
-            value = parsed.run(this);
-            if (isNaN(value)) value = '#VALUE!';
-        } catch (e) {
-            throw e;
-            console.error(e);
-            value = '#ERROR!';
-            parsed = null;
-        }
+        var value = parsed.run(this);
 
         // Set the calculated value in the calculated cache
         this.calculated[row] = this.calculated[row] || [];
@@ -144,7 +135,7 @@ export default class WebSheet {
 
         // Set the value of the element
         const elem = this.getCell(cellID);
-        if (elem) elem.value = value;
+        if (elem) elem.value = this.formatValue(cellID, value);
 
         if (wasUpdated) {
             this.updateDependencies(cellID);
@@ -196,34 +187,52 @@ export default class WebSheet {
         }
         this.cellCache = {};
 
-        var workQueue = [];
+        const workQueue = [];
 
         // Create each row and cell
-        for (var i = 0; i < this.height; i++) {
-            let row = document.createElement('div');
+        for (let i = 0; i < this.height; i++) {
+            const row = document.createElement('div');
             row.style.width = `${width}px`;
             row.className = 'websheet-row';
             this.elem.appendChild(row);
 
-            let rowDataCache = this.data[i] || [];
-            let rowCalculatedCache = this.calculated[i] || [];
+            const rowDataCache = this.data[i] || [];
+            const rowCalculatedCache = this.calculated[i] || [];
 
-            for (var j = 0; j < this.width; j++) {
-                let cell = document.createElement('input');
+            for (let j = 0; j < this.width; j++) {
+                const cellID = getCellID(i, j);
+
+                const cell = document.createElement('input');
                 cell.className = 'websheet-cell';
                 if (this.immutable) {
                     cell.readOnly = true;
                 }
 
-                let cellWrapper = document.createElement('div');
+                const cellWrapper = document.createElement('div');
                 cellWrapper.className = 'websheet-cell-wrapper';
                 cellWrapper.style.width = (this.columnWidths[j] - 1) + 'px';
                 cellWrapper.appendChild(cell);
 
                 row.appendChild(cellWrapper);
 
-                cell.value = this.getCalculatedValueAtPos(i, j);
-                cell.setAttribute('data-id', cell.title = getCellID(i, j));
+                let cellValue = null;
+                if (j in rowCalculatedCache &&
+                        rowCalculatedCache[j] !== null &&
+                        typeof rowCalculatedCache[j] !== 'undefined') {
+                    cellValue = rowCalculatedCache[j];
+
+                } else if (j in rowDataCache &&
+                           rowDataCache[j] !== null &&
+                           typeof rowDataCache[j] !== 'undefined') {
+                    cellValue = rowDataCache[j];
+                }
+
+                if (cellValue !== null) {
+                    cell.value = this.formatValue(cellID, cellValue);
+                }
+
+                cell.title = cellID;
+                cell.setAttribute('data-id', cellID);
                 cell.setAttribute('data-id-prev-col', getCellID(i, j - 1));
                 cell.setAttribute('data-id-prev-row', getCellID(i - 1, j));
                 cell.setAttribute('data-id-next-col', getCellID(i, j + 1));
@@ -246,6 +255,33 @@ export default class WebSheet {
         }
 
         workQueue.forEach(task => task());
+    }
+
+    formatValue(cellID, value) {
+        switch (typeof value) {
+            case 'string':
+                break; // pass
+
+            case 'number':
+                if (value === Infinity || value === -1 * Infinity) {
+                    return '#DIV/0!';
+                }
+                value = value.toString();
+                break;
+
+            case 'boolean':
+                value = value ? 'TRUE' : 'FALSE';
+                break;
+
+            default:
+                if (value instanceof Date) {
+                    value = value.toLocaleString();
+                    break;
+                }
+                return '#VALUE!';
+        }
+
+        return value;
     }
 
     getCalculatedValueAtID(id) {
@@ -376,7 +412,7 @@ export default class WebSheet {
         } else {
             this.updateDependencies(cellID);
             const elem = this.getCell(cellID);
-            if (elem) elem.value = value;
+            if (elem) elem.value = this.formatValue(cellID, value);
         }
     }
 

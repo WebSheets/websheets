@@ -6,9 +6,7 @@ import {parseNumMaybe} from './functions';
 export default class ExpressionNode {
     constructor(type, params) {
         this.type = type;
-        for (var i in params) {
-            this[i] = params[i];
-        }
+        Object.assign(this, params);
     }
 
     walk(cb) {
