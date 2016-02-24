@@ -6,7 +6,8 @@ const TOKEN_BOOL = /^(true|false)/i;
 const TOKEN_STRING = /^"([^\\]|\\.)*"/i;
 const TOKEN_CELL_ID = /^(\$?)(\w+)(\$?)(\d+)/i;
 const TOKEN_NUM = /^((([1-9][0-9]*\.|0\.)[0-9]+)|([1-9][0-9]*)|0)/;
-const TOKEN_BINOP_TIMES = /^(\/|\*|\^)/;
+const TOKEN_BINOP_TIMES = /^(\/|\*)/;
+const TOKEN_BINOP_EXP = /^(\^)/;
 const TOKEN_BINOP_ADD = /^(\+|\-|&)/;
 const TOKEN_BINOP_COMP = /^(<>|=|>=|<=|<|>)/;
 const TOKEN_FOPEN = /^(\w+)\(/;
@@ -60,6 +61,9 @@ export default function parse(expression) {
 
         } else if (matches = TOKEN_LPAREN.exec(remainder)) {
             output = new ExpressionToken('lparen', '(');
+
+        } else if (matches = TOKEN_BINOP_EXP.exec(remainder)) {
+            output = new ExpressionToken('binop_expon', matches[0]);
 
         } else if (matches = TOKEN_BINOP_TIMES.exec(remainder)) {
             output = new ExpressionToken('binop_times', matches[0]);
@@ -199,37 +203,56 @@ export default function parse(expression) {
         assert('rparen');
         return output;
     }
-    function parseTimesBinop() {
-        var lval = parseParen();
+    function parseExponBinop(lval = parseParen()) {
+        var peeked = accept('binop_expon');
+        if (!peeked) {
+            return lval;
+        }
+        return parseExponBinop(
+            new ExpressionNode(
+                'binop_expon',
+                {
+                    left: lval,
+                    operator: peeked.value,
+                    right: parseParen(),
+                }
+            )
+        );
+    }
+    function parseTimesBinop(lval = parseExponBinop()) {
         var peeked = accept('binop_times');
         if (!peeked) {
             return lval;
         }
-        return new ExpressionNode(
-            peeked.value === '*' ? 'binop_mult' :
-                (peeked.value === '/' ? 'binop_div' : 'binop_expon'), {
-            left: lval,
-            operator: peeked.value,
-            right: parseTimesBinop(),
-        });
+        return parseTimesBinop(
+            new ExpressionNode(
+                peeked.value === '*' ? 'binop_mult' : 'binop_div',
+                {
+                    left: lval,
+                    operator: peeked.value,
+                    right: parseExponBinop(),
+                }
+            )
+        );
     }
-    function parseAddBinop() {
-        var lval = parseTimesBinop();
+    function parseAddBinop(lval = parseTimesBinop()) {
         var peeked = accept('binop_add');
         if (!peeked) {
             return lval;
         }
-        return new ExpressionNode(
-            peeked.value === '+' ?
-                'binop_add' :
-                (peeked.value === '&' ?
-                    'binop_concat' :
-                    'binop_sub'),
-            {
-                left: lval,
-                operator: peeked.value,
-                right: parseAddBinop(),
-            }
+        return parseTimesBinop(
+            new ExpressionNode(
+                peeked.value === '+' ?
+                    'binop_add' :
+                    (peeked.value === '&' ?
+                        'binop_concat' :
+                        'binop_sub'),
+                {
+                    left: lval,
+                    operator: peeked.value,
+                    right: parseTimesBinop(),
+                }
+            )
         );
     }
     function parseCompBinop() {

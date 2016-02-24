@@ -3,25 +3,18 @@ import assert from 'assert';
 import compiler from '../../src/exprCompiler';
 import {getCellID} from '../../src/utils/cellID';
 
-
-class Runner {
-    constructor(values, sheets = {}) {
-        this.data = values;
-        this.sheets = sheets;
-    }
-    getCalculatedValueAtPos(row, col) {
-        return this.getCalculatedValueAtID(getCellID(row, col));
-    }
-    getCalculatedValueAtID(id) {
-        return this.data[id] || 1;
-    }
-    getSheet(x) {
-        return this.sheets[x];
-    }
-}
+import {Runner} from './_utils.js';
 
 
 describe('Formulae', () => {
+    it('should parse multiplication with the correct precedence', () => {
+        assert.equal(compiler('2*3+4').run(null), 10);
+        assert.equal(compiler('2+3*4').run(null), 14);
+    });
+    it('should parse exponents with the correct precedence', () => {
+        assert.equal(compiler('2^4*100').run(null), 1600);
+    });
+
     it('should parse functions', () => {
         const r = new Runner({
             A1: 1,
