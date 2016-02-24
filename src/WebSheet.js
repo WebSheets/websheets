@@ -266,6 +266,9 @@ export default class WebSheet {
                 if (value === Infinity || value === -1 * Infinity) {
                     return '#DIV/0!';
                 }
+                if (isNaN(value)) {
+                    return '#VALUE!';
+                }
                 value = value.toString();
                 break;
 
