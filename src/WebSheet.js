@@ -12,8 +12,10 @@ const DEFAULT_BORDER_WIDTH = 1; // px
 
 const defaultParams = {
     context: null,
+    immutable: false,
     name: null,
     noBrowser: false,
+
     height: 6,
     width: 6,
 };
@@ -35,7 +37,6 @@ export default class WebSheet {
 
         this.data = [];
         this.calculated = [];
-        this.formatting = [];
 
         this.depUpdateQueue = null;
         this.dependencies = {}; // Map of cell ID to array of dependant cell IDs
@@ -49,7 +50,7 @@ export default class WebSheet {
         this.valueUpdates = new Emitter();
         this.calculatedUpdates = new Emitter();
 
-        if (this.noBrowser) {
+        if (this.noBrowser || this.immutable) {
             return;
         }
 
@@ -74,7 +75,6 @@ export default class WebSheet {
         this.height += 1;
         this.data.push(new Array(this.width));
         this.calculated.push(new Array(this.width));
-        this.formatting.push(new Array(this.width));
         if (rerender) {
             this.forceRerender();
         }
@@ -201,20 +201,19 @@ export default class WebSheet {
         // Create each row and cell
         for (var i = 0; i < this.height; i++) {
             let row = document.createElement('div');
-            row.style.width = width + 'px';
+            row.style.width = `${width}px`;
             row.className = 'websheet-row';
-            if (i < 1) {
-                row.className += ' websheet-row-sticky';
-            }
             this.elem.appendChild(row);
 
             let rowDataCache = this.data[i] || [];
             let rowCalculatedCache = this.calculated[i] || [];
-            let rowFormattingCache = this.formatting[i] || [];
 
             for (var j = 0; j < this.width; j++) {
                 let cell = document.createElement('input');
                 cell.className = 'websheet-cell';
+                if (this.immutable) {
+                    cell.readOnly = true;
+                }
 
                 let cellWrapper = document.createElement('div');
                 cellWrapper.className = 'websheet-cell-wrapper';
@@ -238,18 +237,13 @@ export default class WebSheet {
                     );
                 }
 
-                let cellFormatting = rowFormattingCache[j];
-                if (!cellFormatting) continue;
-                for (let cellFormattingStyle in cellFormatting) {
-                    if (!cellFormatting.hasOwnProperty(cellFormattingStyle)) continue;
-                    cell.style[cellFormattingStyle] = cellFormatting[cellFormattingStyle];
-                }
-
             }
         }
 
-        // Bind event handlers
-        initEvents(this);
+        if (!this.immutable) {
+            // Bind event handlers
+            initEvents(this);
+        }
 
         workQueue.forEach(task => task());
     }
@@ -299,7 +293,6 @@ export default class WebSheet {
         for (var i = 0; i < this.height; i++) {
             if (this.data[i]) this.data[i].splice(idx, 0, null);
             if (this.calculated[i]) this.calculated[i].splice(idx, 0, null);
-            if (this.formatting[i]) this.formatting[i].splice(idx, 0, null);
         }
         this.forceRerender();
     }
@@ -307,7 +300,6 @@ export default class WebSheet {
         this.height += 1;
         this.data.splice(idx, 0, new Array(this.width));
         this.calculated.splice(idx, 0, new Array(this.width));
-        this.formatting.splice(idx, 0, new Array(this.width));
         this.forceRerender();
     }
 
@@ -331,7 +323,6 @@ export default class WebSheet {
         for (var i = 0; i < this.height; i++) {
             if (this.data[i] && this.data[i].length > this.width) this.data[i].pop();
             if (this.calculated[i] && this.calculated[i].length > this.width) this.calculated[i].pop();
-            if (this.formatting[i] && this.formatting[i].length > this.width) this.formatting[i].pop();
         }
         this.forceRerender();
     }
@@ -340,7 +331,6 @@ export default class WebSheet {
         this.height -= 1;
         this.data.pop();
         this.calculated.pop();
-        this.formatting.pop();
         this.forceRerender();
     }
 
@@ -352,7 +342,6 @@ export default class WebSheet {
         for (var i = 0; i < this.height; i++) {
             if (this.data[i]) this.data[i].splice(idx, 1);
             if (this.calculated[i]) this.calculated[i].splice(idx, 1);
-            if (this.formatting[i]) this.formatting[i].splice(idx, 1);
         }
         this.forceRerender();
     }
@@ -362,7 +351,6 @@ export default class WebSheet {
         this.height -= 1;
         this.data.splice(i, 1);
         this.calculated.splice(i, 1);
-        this.formatting.splice(i, 1);
         this.forceRerender();
     }
 
