@@ -36,7 +36,7 @@ export default function execFunc(name, myArgs, sheet) {
         return directExprFuncs[ucaseName](...args);
     }
 
-    throw new Error(`Unknown function "${ucaseName}"`);
+    throw new Error('#NAME?');
 };
 
 

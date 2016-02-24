@@ -1,6 +1,7 @@
+import {DRAG_HANDLE, DRAG_MOVE, DRAG_NONE} from './constants';
 import {getCellID, getCellPos} from './utils/cellID';
 import {listen, unlisten} from './utils/events';
-import {DRAG_HANDLE, DRAG_MOVE, DRAG_NONE} from './constants';
+import parse from './exprCompiler';
 
 
 export function unbindEvents(self) {
@@ -14,7 +15,7 @@ export function unbindEvents(self) {
 };
 export function initEvents(self) {
     unbindEvents(self);
-    var {elem} = self;
+    const {elem} = self;
     listen(elem, 'focus', onFocus.bind(self));
     listen(elem, 'blur', onBlur.bind(self));
     listen(elem, 'keyup', onKeyup.bind(self));
@@ -26,15 +27,15 @@ export function initEvents(self) {
 };
 
 export function onFocus(e) {
-    var row = e.target.getAttribute('data-row') | 0;
-    var col = e.target.getAttribute('data-col') | 0;
+    const row = e.target.getAttribute('data-row') | 0;
+    const col = e.target.getAttribute('data-col') | 0;
     e.target.value = (this.data[row] || [])[col] || '';
     e.target.select(0, e.target.value.length);
     e.target.parentNode.className = 'websheet-cell-wrapper websheet-has-focus';
 };
 export function onBlur(e) {
-    var row = e.target.getAttribute('data-row') | 0;
-    var col = e.target.getAttribute('data-col') | 0;
+    const row = e.target.getAttribute('data-row') | 0;
+    const col = e.target.getAttribute('data-col') | 0;
     this.setValueAtPosition(row, col, e.target.value);
     if (this.calculated[row] && col in this.calculated[row]) {
         e.target.value = this.formatValue(
@@ -68,15 +69,15 @@ export function onKeyup(e) {
     }
 };
 export function onMousedown(e) {
-    var {target} = e;
+    const {target} = e;
     if (!target.classList.contains('websheet-has-focus')) {
         return;
     }
 
     e.preventDefault();
 
-    var id = this.dragSource = target.firstChild.getAttribute('data-id');
-    var pos = getCellPos(id);
+    const id = this.dragSource = target.firstChild.getAttribute('data-id');
+    const pos = getCellPos(id);
 
     // Assign the value of the currently focused cell's input to the cell, just
     // incase it changed and hasn't been updated on the blur event.
@@ -92,7 +93,7 @@ export function onMousedown(e) {
     this.elem.className += ' websheet-grabbing';
 };
 export function onMouseup(e) {
-    var {target} = e;
+    const {target} = e;
 
     if (this.dragType !== DRAG_NONE &&
         target.classList.contains('websheet-cell')) {
@@ -106,8 +107,8 @@ export function onMouseup(e) {
             e.target.focus();
 
         } else if (this.dragType === DRAG_HANDLE && (pos.row === pos2.row || pos.col === pos2.col)) {
-            var rawSource = this.getValueAtPos(pos.row, pos.col) || '';
-            var parsedSource = rawSource[0] === '=' && parse(rawSource.substr(1));
+            const rawSource = this.getValueAtPos(pos.row, pos.col) || '';
+            const parsedSource = rawSource[0] === '=' && parse(rawSource.substr(1));
 
             if (pos.row === pos2.row) {
                 let min = Math.min(pos.col, pos2.col);
@@ -123,7 +124,7 @@ export function onMouseup(e) {
                 }
 
             } else if (pos.col === pos2.col) {
-                let min = Math.min(pos.row, pos2.row);
+                const min = Math.min(pos.row, pos2.row);
                 for (let i = min; i <= Math.max(pos.row, pos2.row); i++) {
                     if (i === pos.row) continue;
                     if (parsedSource) {
@@ -144,7 +145,7 @@ export function onMouseup(e) {
     this.dragType = DRAG_NONE;
     this.dragSource = null;
 
-    var existing = this.elem.querySelectorAll('.websheet-cell-hover');
+    const existing = this.elem.querySelectorAll('.websheet-cell-hover');
     for (let i = 0; i < existing.length; i++) {
         existing[i].classList.remove('websheet-cell-hover');
     }
@@ -153,25 +154,25 @@ export function onMouseover(e) {
     if (this.dragType === DRAG_NONE) return;
     if (!e.target.classList.contains('websheet-cell')) return;
 
-    var toRemoveClassFrom = [];
+    const toRemoveClassFrom = [];
 
-    var existing = this.elem.querySelectorAll('.websheet-cell-hover');
-    for (var i = 0; i < existing.length; i++) {
+    const existing = this.elem.querySelectorAll('.websheet-cell-hover');
+    for (let i = 0; i < existing.length; i++) {
         toRemoveClassFrom.push(existing[i].firstChild.dataset.id);
     }
 
-    var targetID = e.target.dataset.id;
+    const targetID = e.target.dataset.id;
     if (targetID === this.dragSource) {
         return;
     }
 
     if (this.dragType === DRAG_HANDLE) {
-        let destPos = getCellPos(targetID);
-        let srcPos = getCellPos(this.dragSource);
+        const destPos = getCellPos(targetID);
+        const srcPos = getCellPos(this.dragSource);
         if (destPos.col === srcPos.col) {
             for (let i = Math.min(srcPos.row, destPos.row); i <= Math.max(srcPos.row, destPos.row); i++) {
-                let tmp = getCellID(i, srcPos.col);
-                let trcfTmp = toRemoveClassFrom.indexOf(tmp);
+                const tmp = getCellID(i, srcPos.col);
+                const trcfTmp = toRemoveClassFrom.indexOf(tmp);
                 if (trcfTmp !== -1) {
                     toRemoveClassFrom.splice(trcfTmp, 1);
                 } else {
@@ -180,8 +181,8 @@ export function onMouseover(e) {
             }
         } else if (destPos.row === srcPos.row) {
             for (let i = Math.min(srcPos.col, destPos.col); i <= Math.max(srcPos.col, destPos.col); i++) {
-                let tmp = getCellID(srcPos.row, i);
-                let trcfTmp = toRemoveClassFrom.indexOf(tmp);
+                const tmp = getCellID(srcPos.row, i);
+                const trcfTmp = toRemoveClassFrom.indexOf(tmp);
                 if (trcfTmp !== -1) {
                     toRemoveClassFrom.splice(trcfTmp, 1);
                 } else {

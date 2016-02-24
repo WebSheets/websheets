@@ -7,7 +7,7 @@ import parseExpression from './exprCompiler';
 import {parseNumMaybe} from './exprCompiler/functions';
 
 
-const DEFAULT_COLUMN_WIDTH = 100; // px
+const DEFAULT_COLUMN_WIDTH = 120; // px
 const DEFAULT_BORDER_WIDTH = 1; // px
 
 const defaultParams = {
@@ -88,7 +88,12 @@ export default class WebSheet {
         var parsed = parseExpression(expression);
 
         // Evaluate the expression to find a value
-        var value = parsed.run(this);
+        var value;
+        try {
+            value = parsed.run(this);
+        } catch (e) {
+            value = new Error('#ERROR!');
+        }
 
         // Set the calculated value in the calculated cache
         this.calculated[row] = this.calculated[row] || [];
@@ -249,7 +254,7 @@ export default class WebSheet {
             }
         }
 
-        if (!this.immutable) {
+        if (!this.immutable || this.noBrowser) {
             // Bind event handlers
             initEvents(this);
         }
@@ -280,6 +285,9 @@ export default class WebSheet {
                 if (value instanceof Date) {
                     value = value.toLocaleString();
                     break;
+                }
+                if (value instanceof Error) {
+                    return value.message;
                 }
                 return '#VALUE!';
         }
@@ -329,9 +337,13 @@ export default class WebSheet {
     insertColumnBefore(idx) {
         this.width += 1;
         this.columnWidths.splice(idx, 0, DEFAULT_COLUMN_WIDTH);
-        for (var i = 0; i < this.height; i++) {
-            if (this.data[i]) this.data[i].splice(idx, 0, null);
-            if (this.calculated[i]) this.calculated[i].splice(idx, 0, null);
+        for (let i = 0; i < this.height; i++) {
+            if (this.data[i]) {
+                this.data[i].splice(idx, 0, null);
+            }
+            if (this.calculated[i]) {
+                this.calculated[i].splice(idx, 0, null);
+            }
         }
         this.forceRerender();
     }
@@ -346,9 +358,9 @@ export default class WebSheet {
         while (this.height < data.length) this.addRow(false);
         while (this.width < data[0].length) this.addColumn(false);
 
-        for (var i = 0; i < data.length; i++) {
+        for (let i = 0; i < data.length; i++) {
             this.data[i] = this.data[i] || [];
-            for (var j = 0; j < data[i].length; j++) {
+            for (let j = 0; j < data[i].length; j++) {
                 this.setValueAtPosition(i, j, data[i][j], true);
             }
         }
@@ -376,6 +388,7 @@ export default class WebSheet {
     removeColumn(idx) {
         if (this.width < 2) throw new Error('Cannot make spreadsheet that small');
         if (idx < 0 || idx >= this.width) throw new Error('Removing cells that do not exist');
+
         this.width -= 1;
         this.columnWidths.splice(idx, 1);
         for (var i = 0; i < this.height; i++) {
@@ -387,6 +400,7 @@ export default class WebSheet {
     removeRow(i) {
         if (this.height < 2) throw new Error('Cannot make spreadsheet that small');
         if (i < 0 || i >= this.width) throw new Error('Removing cells that do not exist');
+
         this.height -= 1;
         this.data.splice(i, 1);
         this.calculated.splice(i, 1);
@@ -431,10 +445,7 @@ export default class WebSheet {
             return;
         }
 
-        this.depUpdateQueue = deps.concat([]); // Make a copy
-        for (let i = 0; i < deps.length; i++) {
-            this.depUpdateQueue.push(deps[i]);
-        }
+        this.depUpdateQueue = [...deps]; // Make a copy
 
         while (this.depUpdateQueue.length) {
             let {row, col} = getCellPos(this.depUpdateQueue.shift());
