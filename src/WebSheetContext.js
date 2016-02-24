@@ -57,13 +57,13 @@ export default class WebSheetContext {
 
     setDependency(fromSheet, fromSheetCellID, toSheetName, toCellID, cb) {
         toSheetName = toSheetName.toUpperCase();
-        if (!this.sheets.hasOwnProperty(sheetName)) return;
+        if (!this.sheets.hasOwnProperty(toSheetName)) return;
 
-        var fromID = `${fromSheet.name.toUpperCase()}!${fromSheetCellID}`;
-        var toID = `${toSheetName}!${toCellID}`;
+        const fromID = `${fromSheet.name.toUpperCase()}!${fromSheetCellID}`;
+        const toID = `${toSheetName}!${toCellID}`;
         this.dependencies[fromID] = this.dependencies[fromID] || [];
 
-        var updateCB = (value, type) => {
+        const updateCB = (value, type) => {
             // Ignore value updates that preceed calculated updates
             if (type === 'value' && value[0] === '=') return;
             cb(value);
@@ -76,8 +76,9 @@ export default class WebSheetContext {
     }
 
     clearDependencies(fromSheet, fromSheetCellID) {
-        var fromID = `${fromSheet.name.toUpperCase()}!${fromSheetCellID}`;
+        const fromID = `${fromSheet.name.toUpperCase()}!${fromSheetCellID}`;
         if (!this.dependencies.hasOwnProperty(fromID)) return;
+
         this.dependencies[fromID].forEach(data => {
             this.sheets[data[0]].valueUpdates.off(data[1], data[2]);
             this.sheets[data[0]].calculatedUpdates.off(data[1], data[2]);

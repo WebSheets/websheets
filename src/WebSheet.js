@@ -11,9 +11,11 @@ const DEFAULT_COLUMN_WIDTH = 100; // px
 const DEFAULT_BORDER_WIDTH = 1; // px
 
 const defaultParams = {
-    width: 6,
-    height: 6,
+    context: null,
+    name: null,
     noBrowser: false,
+    height: 6,
+    width: 6,
 };
 
 
@@ -46,9 +48,6 @@ export default class WebSheet {
 
         this.valueUpdates = new Emitter();
         this.calculatedUpdates = new Emitter();
-
-        this.context = params.context || null;
-        this.name = null;
 
         if (params.noBrowser) {
             return;
