@@ -221,7 +221,9 @@ export default class WebSheet {
                 cell.setAttribute('data-col', j);
 
                 if (cell.value[0] === '=') {
-                    workQueue.push(() => this.setValueAtPosition(i, j, cell.value, true));
+                    workQueue.push(
+                        this.setValueAtPosition.bind(this, i, j, cell.value, true)
+                    );
                 }
 
                 let cellFormatting = rowFormattingCache[j];
