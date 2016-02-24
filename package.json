@@ -1,6 +1,6 @@
 {
   "name": "websheets",
-  "version": "0.1.7",
+  "version": "0.1.8",
   "description": "A spreadsheet component for the web",
   "devDependencies": {
     "babel-cli": "^6.4.5",
