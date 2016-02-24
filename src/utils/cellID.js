@@ -16,6 +16,7 @@ export function getCellID(row, column) {
 
 var cellPosCache = {};
 export function getCellPos(id) {
+    id = id.toUpperCase();
     if (id in cellPosCache) return cellPosCache[id];
     var matches = /^([a-z]+)([0-9]+)$/i.exec(id);
     var charBit = matches[1];

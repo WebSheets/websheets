@@ -13,6 +13,7 @@ const DEFAULT_BORDER_WIDTH = 1; // px
 const defaultParams = {
     width: 6,
     height: 6,
+    noBrowser: false,
 };
 
 
@@ -23,9 +24,7 @@ export default class WebSheet {
         this.elem = elem;
         this.elem.className = 'websheet';
 
-        Object.assign(params, defaultParams);
-        this.height = params.height;
-        this.width = params.width;
+        Object.assign(this, defaultParams, params);
 
         this.columnWidths = [];
         for (let i = 0; i < params.width; i++) {
@@ -45,6 +44,16 @@ export default class WebSheet {
         this.dragType = DRAG_NONE;
         this.dragSource = null;
 
+        this.valueUpdates = new Emitter();
+        this.calculatedUpdates = new Emitter();
+
+        this.context = params.context || null;
+        this.name = null;
+
+        if (params.noBrowser) {
+            return;
+        }
+
         listen(window, 'mouseup', this[WINDOW_MOUSEUP] = e => {
             if (this.dragType === DRAG_NONE) {
                 return;
@@ -53,12 +62,6 @@ export default class WebSheet {
             this.dragSource = null;
             this.elem.className = 'websheet';
         });
-
-        this.valueUpdates = new Emitter();
-        this.calculatedUpdates = new Emitter();
-
-        this.context = params.context || null;
-        this.name = null;
     }
 
     addColumn() {
@@ -137,7 +140,8 @@ export default class WebSheet {
         this.dependants[cellID] = dependants;
 
         // Set the value of the element
-        this.getCell(cellID).value = value;
+        const elem = this.getCell(cellID);
+        if (elem) elem.value = value;
 
         if (wasUpdated) {
             this.updateDependencies(cellID);
@@ -146,15 +150,16 @@ export default class WebSheet {
     }
 
     clearCell(row, col) {
-        var cellID = getCellID(row, col);
-        var elem = this.getCell(cellID);
-        if (!elem) return;
-
-        elem.value = '';
+        const cellID = getCellID(row, col);
         if (row in this.data) delete this.data[row][col];
         if (row in this.calculated) delete this.calculated[row][col];
         this.clearDependants(cellID);
         this.dependants[cellID] = [];
+
+        const elem = this.getCell(cellID);
+        if (elem) {
+            elem.value = '';
+        }
     }
 
     clearDependants(id) {
@@ -173,6 +178,10 @@ export default class WebSheet {
     }
 
     forceRerender() {
+        if (this.noBrowser) {
+            return;
+        }
+
         // First, update the element to be the correct dimensions.
         var width = this.columnWidths.reduce((a, b) => a + b); // Get the width of each column
         width += DEFAULT_BORDER_WIDTH;
@@ -243,15 +252,20 @@ export default class WebSheet {
     }
 
     getCalculatedValueAtID(id) {
-        var pos = getCellPos(id);
-        return this.getCalculatedValueAtPos(pos.row, pos.col);
+        const {row, col} = getCellPos(id);
+        return this.getCalculatedValueAtPos(row, col);
     }
 
     getCalculatedValueAtPos(row, col) {
-        return parseNumMaybe((this.calculated[row] || [])[col] || (this.data[row] || [])[col] || 0);
+        return parseNumMaybe(
+            (this.calculated[row] || [])[col] ||
+            (this.data[row] || [])[col] ||
+            0
+        );
     }
 
     getCell(id) {
+        if (this.noBrowser) return null;
         if (id in this.cellCache) return this.cellCache[id];
         return this.cellCache[id] = this.elem.querySelector(`[data-id="${id}"]`);
     }
@@ -292,7 +306,7 @@ export default class WebSheet {
         for (var i = 0; i < data.length; i++) {
             this.data[i] = this.data[i] || [];
             for (var j = 0; j < data[i].length; j++) {
-                this.data[i][j] = data[i][j];
+                this.setValueAtPosition(i, j, data[i][j], true);
             }
         }
         this.forceRerender();
@@ -341,8 +355,7 @@ export default class WebSheet {
     }
 
     setValueAtPosition(row, col, value, force = false) {
-        var cellID = getCellID(row, col);
-        var elem = this.getCell(cellID);
+        const cellID = getCellID(row, col);
 
         this.data[row] = this.data[row] || [];
         if (this.data[row][col] === value && !force) {
@@ -362,6 +375,7 @@ export default class WebSheet {
             this.calculateValueAtPosition(row, col, value.substr(1));
         } else {
             this.updateDependencies(cellID);
+            const elem = this.getCell(cellID);
             if (elem) elem.value = value;
         }
     }
