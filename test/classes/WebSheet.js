@@ -23,6 +23,7 @@ describe('WebSheet', () => {
         });
 
     });
+
     describe('getCalculatedValueAtID', () => {
 
         it('should deal with calculated values that are falsey but not nullish', () => {
@@ -34,6 +35,23 @@ describe('WebSheet', () => {
                 ]
             ]);
             assert.equal(sheet.getCalculatedValueAtID('b1'), 123);
+        });
+
+    });
+
+    describe('cycle detection', () => {
+
+        it('should allow cycles to be banned by setting iterate to false', () => {
+            const sheet = new WebSheet({}, {noBrowser: true, iterate: false});
+            // This sheet will calculate off into infinity and never reach equilibrium.
+            sheet.loadData([
+                [
+                    '=b1+1',
+                    '=A1',
+                ]
+            ]);
+            assert.equal(sheet.getCalculatedValueAtID('a1'), 1);
+            assert.equal(sheet.getCalculatedValueAtID('b1'), 0);
         });
 
     });

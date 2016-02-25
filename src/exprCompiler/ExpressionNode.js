@@ -1,6 +1,7 @@
 import execFunc from './functions';
 import {getCellID, getCellPos} from '../utils/cellID';
 import {parseNumMaybe} from './functions';
+import {TOKEN_CELL_ID} from './index';
 
 
 export default class ExpressionNode {

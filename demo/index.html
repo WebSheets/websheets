@@ -1,0 +1,20 @@
+<html>
+<head>
+  <title>Websheets Demo</title>
+  <link rel="stylesheet" href="../src/websheet.css" />
+</head>
+<body>
+  <div class="websheet"></div>
+  <script src="../dist/src/websheet.min.js"></script>
+  <script>
+    var sheet = new WebSheet(document.querySelector('.websheet'));
+    sheet.forceRerender();
+    sheet.valueUpdates.on('A1', function(value) {
+        console.log('A1 was updated with the value "' + value + '"');
+    });
+    sheet.calculatedUpdates.on('A1', function(value) {
+        console.log('A1 was calculated to contain the value "' + value + '"');
+    });
+  </script>
+</body>
+</html>

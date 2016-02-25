@@ -18,6 +18,9 @@ const defaultParams = {
 
     height: 6,
     width: 6,
+
+    iterate: true,
+    maxIterations: 100,
 };
 
 
@@ -38,6 +41,7 @@ export default class WebSheet {
         this.data = [];
         this.calculated = [];
 
+        this.calculationSemaphore = {};
         this.depUpdateQueue = null;
         this.dependencies = {}; // Map of cell ID to array of dependant cell IDs
         this.dependants = {}; // Map of cell ID to array of dependencies
@@ -49,6 +53,7 @@ export default class WebSheet {
 
         this.valueUpdates = new Emitter();
         this.calculatedUpdates = new Emitter();
+        this.console = new Emitter();
 
         if (this.noBrowser || this.immutable) {
             return;
@@ -82,15 +87,33 @@ export default class WebSheet {
 
     calculateValueAtPosition(row, col, expression) {
         if (!expression) return;
-        var cellID = getCellID(row, col);
+        const cellID = getCellID(row, col);
+        var value;
+        var doCalculate = true;
+
+        // Do some cycle detection.
+        if (cellID in this.calculationSemaphore) {
+            if (!this.iterate) {
+                this.console.fire('error', 'Cycle detected and aborted because iterate is set to false');
+                doCalculate = false;
+            }
+            this.calculationSemaphore[cellID]++;
+        } else {
+            this.calculationSemaphore[cellID] = 1;
+        }
 
         // Parse the expression
         var parsed = parseExpression(expression);
 
         // Evaluate the expression to find a value
-        var value;
         try {
-            value = parsed.run(this);
+            // We have a switch to disable calculation in case there is a
+            // circular reference and that's banned.
+            if (doCalculate) {
+                value = parsed.run(this);
+            } else {
+                value = 0;
+            }
         } catch (e) {
             value = new Error('#ERROR!');
         }
@@ -140,11 +163,19 @@ export default class WebSheet {
 
         // Set the value of the element
         const elem = this.getCell(cellID);
-        if (elem) elem.value = this.formatValue(cellID, value);
+        if (elem) {
+            elem.value = this.formatValue(cellID, value);
+        }
 
         if (wasUpdated) {
             this.updateDependencies(cellID);
             this.calculatedUpdates.fire(cellID, value);
+        }
+
+        // Clean up the cycle detection semaphore
+        this.calculationSemaphore[cellID]--;
+        if (!this.calculationSemaphore[cellID]) {
+            delete this.calculationSemaphore[cellID];
         }
     }
 
@@ -162,10 +193,10 @@ export default class WebSheet {
     }
 
     clearDependants(id) {
-        var deps = this.dependants[id];
+        const deps = this.dependants[id];
         if (!deps) return;
 
-        for (var i = 0; i < deps.length; i++) {
+        for (let i = 0; i < deps.length; i++) {
             let remDeps = this.dependencies[deps[i]];
             if (!remDeps) continue;
             let idx = remDeps.indexOf(id);
@@ -429,7 +460,9 @@ export default class WebSheet {
         } else {
             this.updateDependencies(cellID);
             const elem = this.getCell(cellID);
-            if (elem) elem.value = this.formatValue(cellID, value);
+            if (elem) {
+                elem.value = this.formatValue(cellID, value);
+            }
         }
     }
 
@@ -439,7 +472,9 @@ export default class WebSheet {
 
         if (this.depUpdateQueue) {
             for (let i = 0; i < deps.length; i++) {
-                if (this.depUpdateQueue.indexOf(deps[i]) !== -1) continue;
+                if (this.depUpdateQueue.indexOf(deps[i]) !== -1) {
+                    continue;
+                }
                 this.depUpdateQueue.push(deps[i]);
             }
             return;

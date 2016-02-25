@@ -2,22 +2,22 @@ import ExpressionToken from './ExpressionToken';
 import ExpressionNode from './ExpressionNode';
 
 
-const TOKEN_BOOL = /^(true|false)/i;
-const TOKEN_STRING = /^"([^\\]|\\.)*"/i;
-const TOKEN_CELL_ID = /^(\$?)(\w+)(\$?)(\d+)/i;
-const TOKEN_NUM = /^((([1-9][0-9]*\.|0\.)[0-9]+)|([1-9][0-9]*)|0)/;
-const TOKEN_BINOP_TIMES = /^(\/|\*)/;
-const TOKEN_BINOP_EXP = /^(\^)/;
-const TOKEN_BINOP_ADD = /^(\+|\-|&)/;
-const TOKEN_BINOP_COMP = /^(<>|=|>=|<=|<|>)/;
-const TOKEN_FOPEN = /^(\w+)\(/;
-const TOKEN_XSOPEN = /^(\w+)!/;
-const TOKEN_RPAREN = /^\)/;
-const TOKEN_LPAREN = /^\(/;
-const TOKEN_COMMA = /^,/;
-const TOKEN_COLON = /^:/;
-const TOKEN_PERCENT = /^%/;
-const TOKEN_WS = /^\s+/;
+export const TOKEN_BOOL = /^(true|false)/i;
+export const TOKEN_STRING = /^"([^\\]|\\.)*"/i;
+export const TOKEN_CELL_ID = /^(\$?)(\w+)(\$?)(\d+)/i;
+export const TOKEN_NUM = /^((([1-9][0-9]*\.|0\.)[0-9]+)|([1-9][0-9]*)|0)/;
+export const TOKEN_BINOP_TIMES = /^(\/|\*)/;
+export const TOKEN_BINOP_EXP = /^(\^)/;
+export const TOKEN_BINOP_ADD = /^(\+|\-|&)/;
+export const TOKEN_BINOP_COMP = /^(<>|=|>=|<=|<|>)/;
+export const TOKEN_FOPEN = /^(\w+)\(/;
+export const TOKEN_XSOPEN = /^(\w+)!/;
+export const TOKEN_RPAREN = /^\)/;
+export const TOKEN_LPAREN = /^\(/;
+export const TOKEN_COMMA = /^,/;
+export const TOKEN_COLON = /^:/;
+export const TOKEN_PERCENT = /^%/;
+export const TOKEN_WS = /^\s+/;
 
 const PARSED_CACHE_THRESHOLD = 10;
 
