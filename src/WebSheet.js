@@ -1,8 +1,8 @@
 import {DRAG_NONE} from './constants';
 import Emitter from './Emitter';
 import {getCellID, getCellPos} from './utils/cellID';
-import {initEvents} from './WebSheet.events';
-import {listen} from './utils/events';
+import {initEvents, unbindEvents} from './WebSheet.events';
+import {listen, unlisten} from './utils/events';
 import parseExpression from './exprCompiler';
 import {parseNumMaybe} from './exprCompiler/functions';
 
@@ -20,7 +20,8 @@ const defaultParams = {
     width: 6,
 
     iterate: true,
-    maxIterations: 100,
+    maxIterations: 1000,
+    iterationEpsilon: 0.001,
 };
 
 
@@ -69,6 +70,11 @@ export default class WebSheet {
         });
     }
 
+    destroy() {
+        unlisten(window, 'mouseup', this[WINDOW_MOUSEUP]);
+        unbindEvents.call(this);
+    }
+
     addColumn(rerender = true) {
         this.width += 1;
         this.columnWidths.push(DEFAULT_COLUMN_WIDTH);
@@ -96,14 +102,21 @@ export default class WebSheet {
             if (!this.iterate) {
                 this.console.fire('error', 'Cycle detected and aborted because iterate is set to false');
                 doCalculate = false;
+                value = 0;
+
+            } else if (this.calculationSemaphore[cellID] > this.maxIterations) {
+                this.console.fire('warn', 'Circular reference hit max iteration limit');
+                value = 0;
             }
+
             this.calculationSemaphore[cellID]++;
+
         } else {
             this.calculationSemaphore[cellID] = 1;
         }
 
         // Parse the expression
-        var parsed = parseExpression(expression);
+        const parsed = parseExpression(expression);
 
         // Evaluate the expression to find a value
         try {
@@ -111,8 +124,6 @@ export default class WebSheet {
             // circular reference and that's banned.
             if (doCalculate) {
                 value = parsed.run(this);
-            } else {
-                value = 0;
             }
         } catch (e) {
             value = new Error('#ERROR!');
@@ -121,22 +132,26 @@ export default class WebSheet {
         // Set the calculated value in the calculated cache
         this.calculated[row] = this.calculated[row] || [];
 
-        var wasUpdated = this.calculated[row][col] !== value;
+        const origCalculatedValue = this.calculated[row][col];
+        const wasUpdated = origCalculatedValue !== value;
         if (wasUpdated) {
             this.calculated[row][col] = value;
         }
 
         // Set the dependants
-        var dependants = [];
+        const dependants = [];
         if (parsed) {
             // Bind intra-sheet dependencies
             parsed.findCellDependencies(dep => {
                 if (dependants.indexOf(dep) !== -1) return;
                 dependants.push(dep);
-                var deps;
                 if (!(dep in this.dependencies)) {
                     this.dependencies[dep] = [cellID];
-                } else if ((deps = this.dependencies[dep]) && deps.indexOf(cellID) === -1) {
+                    return;
+                }
+
+                const deps = this.dependencies[dep];
+                if (deps && deps.indexOf(cellID) === -1) {
                     deps.push(cellID);
                 }
             });
@@ -355,9 +370,13 @@ export default class WebSheet {
     }
 
     getSheet(name) {
-        if (!this.context) throw new Error('No context to extract sheet from');
+        if (!this.context) {
+            throw new Error('No context to extract sheet from');
+        }
         name = name.toUpperCase();
-        if (!(name in this.context.sheets)) throw new Error('Undefined sheet requested');
+        if (!(name in this.context.sheets)) {
+            throw new Error('Undefined sheet requested');
+        }
         return this.context.sheets[name];
     }
 
