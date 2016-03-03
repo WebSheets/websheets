@@ -9,7 +9,7 @@ An experiment to make a spreadsheet engine for the web.
     + Addition, subtraction, multiplication, division (with order of operations)
     + Ability to reference individual cells
     + Ability to pass ranges of cells (in two dimensions) as function arguments
-    + Large list of compatible Excel-style functions
+    + Very large list of compatible Excel-style functions
     + Dynamically update as referenced values update
 - Dynamically sized columns
 - Keyboard interactions similar to Excel
@@ -18,7 +18,5 @@ An experiment to make a spreadsheet engine for the web.
     + Drag corner of cell to copy
     + Copied cells adjust their formulas
         + Support for pinning identifiers with `$` (e.g., `$A$1`, `A$2`)
-- Import parsed tabular data (`loadData`)
-- Scheduler-based calculation system
-    + Prevents infinite loops in formulas
-    + Keeps complex formula dependencies from becoming very slow
+- Import parsed data (`loadData`)
+- Supports Excel-style circular reference convergence

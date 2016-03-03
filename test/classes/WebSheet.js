@@ -50,8 +50,34 @@ describe('WebSheet', () => {
                     '=A1',
                 ]
             ]);
-            assert.equal(sheet.getCalculatedValueAtID('a1'), 1);
-            assert.equal(sheet.getCalculatedValueAtID('b1'), 0);
+            assert.equal(sheet.getCalculatedValueAtID('a1'), 2);
+            assert.equal(sheet.getCalculatedValueAtID('b1'), 1);
+        });
+
+        it('should hit the iteration limit softly', () => {
+            const sheet = new WebSheet({}, {
+                noBrowser: true,
+                iterate: true,
+                maxIterations: 3,
+            });
+
+            let hitLimit = false;
+            sheet.console.on('warn', err => {
+                assert.ok(/max iteration limit/.exec(err));
+                hitLimit = true;
+            });
+
+            // This sheet will calculate off into infinity and never reach equilibrium.
+            sheet.loadData([
+                [
+                    '=b1+1',
+                    '=A1',
+                ]
+            ]);
+            assert.equal(sheet.getCalculatedValueAtID('a1'), 5);
+            assert.equal(sheet.getCalculatedValueAtID('b1'), 4);
+
+            assert.ok(hitLimit);
         });
 
     });

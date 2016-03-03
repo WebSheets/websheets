@@ -15,6 +15,7 @@
     sheet.calculatedUpdates.on('A1', function(value) {
         console.log('A1 was calculated to contain the value "' + value + '"');
     });
+    sheet.console.onAll(console.log.bind(console));
   </script>
 </body>
 </html>
