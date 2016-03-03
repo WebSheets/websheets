@@ -486,20 +486,22 @@ export default class WebSheet {
             // Iterate each dependency
             for (let dep of deps) {
                 // Have we seen this dependency before?
-                if (dep in this.calculationSourceGraph) {
-                    // If we've seen it referenced from this source before and
-                    // iteration is banned, report it.
-                    if (!this.iterate &&
-                        this.calculationSourceGraph[dep].indexOf(cellID) !== -1) {
-                        this.console.fire('error', `Cyclic reference banned at ${cellID} -> ${dep}`);
-                        continue;
+                if (this.calculationSourceGraph) {
+                    if (dep in this.calculationSourceGraph) {
+                        // If we've seen it referenced from this source before and
+                        // iteration is banned, report it.
+                        if (!this.iterate &&
+                            this.calculationSourceGraph[dep].indexOf(cellID) !== -1) {
+                            this.console.fire('error', `Cyclic reference banned at ${cellID} -> ${dep}`);
+                            continue;
+                        }
+                        // If we haven't seen it, mark that we've seen it
+                        // referenced from this cell.
+                        this.calculationSourceGraph[dep].push(cellID);
+                    } else {
+                        // If we haven't seen it, create the entry.
+                        this.calculationSourceGraph[dep] = [cellID];
                     }
-                    // If we haven't seen it, mark that we've seen it
-                    // referenced from this cell.
-                    this.calculationSourceGraph[dep].push(cellID);
-                } else {
-                    // If we haven't seen it, create the entry.
-                    this.calculationSourceGraph[dep] = [cellID];
                 }
 
                 // If we've already queueued the recalculation of the
@@ -513,7 +515,9 @@ export default class WebSheet {
             return;
         }
 
-        this.calculationSourceGraph = {};
+        if (!this.iterate) {
+            this.calculationSourceGraph = {};
+        }
         this.calculationSemaphore = {[cellID]: 1};
         this.depUpdateQueue = [...deps];
 
