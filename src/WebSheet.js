@@ -1,8 +1,8 @@
 import {DRAG_NONE} from './constants';
 import Emitter from './Emitter';
 import {getCellID, getCellPos} from './utils/cellID';
-import {initEvents} from './WebSheet.events';
-import {listen} from './utils/events';
+import {initEvents, unbindEvents} from './WebSheet.events';
+import {listen, unlisten} from './utils/events';
 import parseExpression from './exprCompiler';
 import {parseNumMaybe} from './exprCompiler/functions';
 
@@ -20,7 +20,8 @@ const defaultParams = {
     width: 6,
 
     iterate: true,
-    maxIterations: 100,
+    maxIterations: 1000,
+    iterationEpsilon: 0.001,
 };
 
 
@@ -41,7 +42,8 @@ export default class WebSheet {
         this.data = [];
         this.calculated = [];
 
-        this.calculationSemaphore = {};
+        this.calculationSemaphore = null;
+        this.calculationSourceGraph = null;
         this.depUpdateQueue = null;
         this.dependencies = {}; // Map of cell ID to array of dependant cell IDs
         this.dependants = {}; // Map of cell ID to array of dependencies
@@ -69,6 +71,11 @@ export default class WebSheet {
         });
     }
 
+    destroy() {
+        unlisten(window, 'mouseup', this[WINDOW_MOUSEUP]);
+        unbindEvents.call(this);
+    }
+
     addColumn(rerender = true) {
         this.width += 1;
         this.columnWidths.push(DEFAULT_COLUMN_WIDTH);
@@ -88,32 +95,29 @@ export default class WebSheet {
     calculateValueAtPosition(row, col, expression) {
         if (!expression) return;
         const cellID = getCellID(row, col);
-        var value;
-        var doCalculate = true;
+        let value;
 
         // Do some cycle detection.
-        if (cellID in this.calculationSemaphore) {
-            if (!this.iterate) {
-                this.console.fire('error', 'Cycle detected and aborted because iterate is set to false');
-                doCalculate = false;
+        if (this.calculationSemaphore) {
+            if (cellID in this.calculationSemaphore) {
+                if (this.calculationSemaphore[cellID] > this.maxIterations) {
+                    this.console.fire('warn', 'Circular reference hit max iteration limit');
+                    return;
+                }
+
+                this.calculationSemaphore[cellID]++;
+
+            } else {
+                this.calculationSemaphore[cellID] = 1;
             }
-            this.calculationSemaphore[cellID]++;
-        } else {
-            this.calculationSemaphore[cellID] = 1;
         }
 
         // Parse the expression
-        var parsed = parseExpression(expression);
+        const parsed = parseExpression(expression);
 
         // Evaluate the expression to find a value
         try {
-            // We have a switch to disable calculation in case there is a
-            // circular reference and that's banned.
-            if (doCalculate) {
-                value = parsed.run(this);
-            } else {
-                value = 0;
-            }
+            value = parsed.run(this);
         } catch (e) {
             value = new Error('#ERROR!');
         }
@@ -121,22 +125,32 @@ export default class WebSheet {
         // Set the calculated value in the calculated cache
         this.calculated[row] = this.calculated[row] || [];
 
-        var wasUpdated = this.calculated[row][col] !== value;
-        if (wasUpdated) {
-            this.calculated[row][col] = value;
+        const origCalculatedValue = this.calculated[row][col];
+        const wasUpdated = (
+            origCalculatedValue !== value ||
+            Math.abs(origCalculatedValue - value) > this.iterationEpsilon
+        );
+
+        if (!wasUpdated) {
+            return;
         }
 
+        this.calculated[row][col] = value;
+
         // Set the dependants
-        var dependants = [];
+        const dependants = [];
         if (parsed) {
             // Bind intra-sheet dependencies
             parsed.findCellDependencies(dep => {
                 if (dependants.indexOf(dep) !== -1) return;
                 dependants.push(dep);
-                var deps;
                 if (!(dep in this.dependencies)) {
                     this.dependencies[dep] = [cellID];
-                } else if ((deps = this.dependencies[dep]) && deps.indexOf(cellID) === -1) {
+                    return;
+                }
+
+                const deps = this.dependencies[dep];
+                if (deps && deps.indexOf(cellID) === -1) {
                     deps.push(cellID);
                 }
             });
@@ -167,16 +181,8 @@ export default class WebSheet {
             elem.value = this.formatValue(cellID, value);
         }
 
-        if (wasUpdated) {
-            this.updateDependencies(cellID);
-            this.calculatedUpdates.fire(cellID, value);
-        }
-
-        // Clean up the cycle detection semaphore
-        this.calculationSemaphore[cellID]--;
-        if (!this.calculationSemaphore[cellID]) {
-            delete this.calculationSemaphore[cellID];
-        }
+        this.updateDependencies(cellID);
+        this.calculatedUpdates.fire(cellID, value);
     }
 
     clearCell(row, col) {
@@ -213,7 +219,7 @@ export default class WebSheet {
         }
 
         // First, update the element to be the correct dimensions.
-        var width = this.columnWidths.reduce((a, b) => a + b); // Get the width of each column
+        let width = this.columnWidths.reduce((a, b) => a + b); // Get the width of each column
         width += DEFAULT_BORDER_WIDTH;
         // width -= this.width * DEFAULT_BORDER_WIDTH; // Account for border widths
         this.elem.style.width = width + 'px';
@@ -355,9 +361,13 @@ export default class WebSheet {
     }
 
     getSheet(name) {
-        if (!this.context) throw new Error('No context to extract sheet from');
+        if (!this.context) {
+            throw new Error('No context to extract sheet from');
+        }
         name = name.toUpperCase();
-        if (!(name in this.context.sheets)) throw new Error('Undefined sheet requested');
+        if (!(name in this.context.sheets)) {
+            throw new Error('Undefined sheet requested');
+        }
         return this.context.sheets[name];
     }
 
@@ -402,7 +412,7 @@ export default class WebSheet {
         if (this.width < 2) throw new Error('Cannot make spreadsheet that small');
         this.width -= 1;
         this.columnWidths.pop();
-        for (var i = 0; i < this.height; i++) {
+        for (let i = 0; i < this.height; i++) {
             if (this.data[i] && this.data[i].length > this.width) this.data[i].pop();
             if (this.calculated[i] && this.calculated[i].length > this.width) this.calculated[i].pop();
         }
@@ -422,7 +432,7 @@ export default class WebSheet {
 
         this.width -= 1;
         this.columnWidths.splice(idx, 1);
-        for (var i = 0; i < this.height; i++) {
+        for (let i = 0; i < this.height; i++) {
             if (this.data[i]) this.data[i].splice(idx, 1);
             if (this.calculated[i]) this.calculated[i].splice(idx, 1);
         }
@@ -467,26 +477,58 @@ export default class WebSheet {
     }
 
     updateDependencies(cellID) {
-        var deps = this.dependencies[cellID];
-        if (!deps) return;
+        const deps = this.dependencies[cellID];
+        if (!deps) {
+            return;
+        }
 
         if (this.depUpdateQueue) {
-            for (let i = 0; i < deps.length; i++) {
-                if (this.depUpdateQueue.indexOf(deps[i]) !== -1) {
+            // Iterate each dependency
+            for (let dep of deps) {
+                // Have we seen this dependency before?
+                if (this.calculationSourceGraph) {
+                    if (dep in this.calculationSourceGraph) {
+                        // If we've seen it referenced from this source before and
+                        // iteration is banned, report it.
+                        if (!this.iterate &&
+                            this.calculationSourceGraph[dep].indexOf(cellID) !== -1) {
+                            this.console.fire('error', `Cyclic reference banned at ${cellID} -> ${dep}`);
+                            continue;
+                        }
+                        // If we haven't seen it, mark that we've seen it
+                        // referenced from this cell.
+                        this.calculationSourceGraph[dep].push(cellID);
+                    } else {
+                        // If we haven't seen it, create the entry.
+                        this.calculationSourceGraph[dep] = [cellID];
+                    }
+                }
+
+                // If we've already queueued the recalculation of the
+                // dependency, don't queue it a second time.
+                if (this.depUpdateQueue.indexOf(dep) !== -1) {
                     continue;
                 }
-                this.depUpdateQueue.push(deps[i]);
+                // Otherwise queue the dependency for recalculation.
+                this.depUpdateQueue.push(dep);
             }
             return;
         }
 
-        this.depUpdateQueue = [...deps]; // Make a copy
+        if (!this.iterate) {
+            this.calculationSourceGraph = {};
+        }
+        this.calculationSemaphore = {[cellID]: 1};
+        this.depUpdateQueue = [...deps];
 
         while (this.depUpdateQueue.length) {
-            let {row, col} = getCellPos(this.depUpdateQueue.shift());
+            const dep = this.depUpdateQueue.shift();
+            const {row, col} = getCellPos(dep);
             this.calculateValueAtPosition(row, col, this.data[row][col].substr(1));
         }
 
+        this.calculationSourceGraph = null;
+        this.calculationSemaphore = null;
         this.depUpdateQueue = null;
     }
 };
