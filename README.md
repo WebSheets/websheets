@@ -1,5 +1,7 @@
 # Websheets
 
+[![Build Status](https://travis-ci.org/mattbasta/websheets.svg?branch=master)](https://travis-ci.org/mattbasta/websheets)
+
 An experiment to make a spreadsheet engine for the web.
 
 
