@@ -135,11 +135,11 @@ export default class ExpressionNode {
     adjust(deltaRow, deltaCol) {
         this.walk(x => {
             if (x.type !== 'identifier') return;
-            var pos = getCellPos(x.value);
-            var row = pos.row + (x.pinRow ? 0 : deltaRow);
-            var col = pos.col + (x.pinCol ? 0 : deltaCol);
+            const pos = getCellPos(x.value);
+            const row = pos.row + (x.pinRow ? 0 : deltaRow);
+            const col = pos.col + (x.pinCol ? 0 : deltaCol);
             x.value = getCellID(row, col);
-            var rematched = TOKEN_CELL_ID.exec(x.value);
+            const rematched = TOKEN_CELL_ID.exec(x.value);
             x.raw = (x.pinCol ? '$' : '') + rematched[2] + (x.pinRow ? '$' : '') + rematched[4];
         });
     }

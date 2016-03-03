@@ -170,11 +170,11 @@ export default function parse(expression) {
         });
     }
     function parseFunc() {
-        var funcName = accept('funcopen');
+        const funcName = accept('funcopen');
         if (!funcName) {
             return parseRange();
         }
-        var args = [];
+        const args = [];
         while (peek()) {
             if (accept('rparen')) break;
             if (args.length) assert('comma');
@@ -186,7 +186,7 @@ export default function parse(expression) {
         });
     }
     function parseSheetRef() {
-        var sheetref = accept('sheetref');
+        const sheetref = accept('sheetref');
         if (!sheetref) {
             return parseFunc();
         }
@@ -199,12 +199,12 @@ export default function parse(expression) {
         if (!accept('lparen')) {
             return parseSheetRef();
         }
-        var output = parseExpression();
+        const output = parseExpression();
         assert('rparen');
         return output;
     }
     function parseExponBinop(lval = parseParen()) {
-        var peeked = accept('binop_expon');
+        const peeked = accept('binop_expon');
         if (!peeked) {
             return lval;
         }
@@ -220,7 +220,7 @@ export default function parse(expression) {
         );
     }
     function parseTimesBinop(lval = parseExponBinop()) {
-        var peeked = accept('binop_times');
+        const peeked = accept('binop_times');
         if (!peeked) {
             return lval;
         }
@@ -236,7 +236,7 @@ export default function parse(expression) {
         );
     }
     function parseAddBinop(lval = parseTimesBinop()) {
-        var peeked = accept('binop_add');
+        const peeked = accept('binop_add');
         if (!peeked) {
             return lval;
         }
@@ -256,8 +256,8 @@ export default function parse(expression) {
         );
     }
     function parseCompBinop() {
-        var lval = parseAddBinop();
-        var peeked = accept('binop_comp');
+        const lval = parseAddBinop();
+        const peeked = accept('binop_comp');
         if (!peeked) {
             return lval;
         }
@@ -283,7 +283,7 @@ export default function parse(expression) {
         return parseCompBinop();
     }
 
-    var output = parseExpression();
+    const output = parseExpression();
 
     if (!(expression in parsedExpressionCount)) {
         parsedExpressionCount[expression] = 1;
