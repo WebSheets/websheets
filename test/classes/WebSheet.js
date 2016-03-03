@@ -43,6 +43,13 @@ describe('WebSheet', () => {
 
         it('should allow cycles to be banned by setting iterate to false', () => {
             const sheet = new WebSheet({}, {noBrowser: true, iterate: false});
+
+            let hitCycle = false;
+            sheet.console.on('error', err => {
+                assert.ok(/cyclic reference/i.exec(err));
+                hitCycle = true;
+            });
+
             // This sheet will calculate off into infinity and never reach equilibrium.
             sheet.loadData([
                 [
@@ -50,8 +57,9 @@ describe('WebSheet', () => {
                     '=A1',
                 ]
             ]);
-            assert.equal(sheet.getCalculatedValueAtID('a1'), 2);
-            assert.equal(sheet.getCalculatedValueAtID('b1'), 1);
+            assert.equal(sheet.getCalculatedValueAtID('a1'), 3);
+            assert.equal(sheet.getCalculatedValueAtID('b1'), 2);
+            assert.ok(hitCycle);
         });
 
         it('should hit the iteration limit softly', () => {

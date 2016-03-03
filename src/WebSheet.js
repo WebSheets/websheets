@@ -100,11 +100,7 @@ export default class WebSheet {
         // Do some cycle detection.
         if (this.calculationSemaphore) {
             if (cellID in this.calculationSemaphore) {
-                if (!this.iterate) {
-                    // TODO
-                    return;
-
-                } else if (this.calculationSemaphore[cellID] > this.maxIterations) {
+                if (this.calculationSemaphore[cellID] > this.maxIterations) {
                     this.console.fire('warn', 'Circular reference hit max iteration limit');
                     return;
                 }
@@ -487,7 +483,6 @@ export default class WebSheet {
         }
 
         if (this.depUpdateQueue) {
-
             // Iterate each dependency
             for (let dep of deps) {
                 // Have we seen this dependency before?
