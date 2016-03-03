@@ -88,5 +88,33 @@ describe('WebSheet', () => {
             assert.ok(hitLimit);
         });
 
+        it('should stop iterating once the delta falls below the epsilon', () => {
+            const sheet = new WebSheet({}, {
+                noBrowser: true,
+                iterate: true,
+                iterationEpsilon: 0.001,
+                maxIterations: 20,
+            });
+
+            let hitLimit = false;
+            sheet.console.on('warn', err => {
+                hitLimit = true;
+            });
+
+            // This sheet will calculate off into infinity and never reach equilibrium.
+            sheet.loadData([
+                ['=a2*0.7'],
+                ['=A3'],
+                ['=(a4+5)*0.1'],
+                ['=a1'],
+            ]);
+            assert.equal(sheet.getCalculatedValueAtID('a1'), 0.3763440860215053);
+            assert.equal(sheet.getCalculatedValueAtID('a2'), 0.5376344086021505);
+            assert.equal(sheet.getCalculatedValueAtID('a3'), 0.5376344086021505);
+            assert.equal(sheet.getCalculatedValueAtID('a4'), 0.3763440860215053);
+
+            assert.ok(!hitLimit);
+        });
+
     });
 });
