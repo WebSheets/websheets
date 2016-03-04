@@ -6,7 +6,9 @@ import WebSheetContext from './WebSheetContext';
 
 
 // This is because `export default` exports {default: WebSheet}
-module.exports = WebSheet;
+exports = module.exports = WebSheet;
+
+export default WebSheet;
 
 export {
     Emitter,
