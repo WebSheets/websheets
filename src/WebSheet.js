@@ -73,7 +73,7 @@ export default class WebSheet {
 
     destroy() {
         unlisten(window, 'mouseup', this[WINDOW_MOUSEUP]);
-        unbindEvents.call(this);
+        unbindEvents(this);
     }
 
     addColumn(rerender = true) {
