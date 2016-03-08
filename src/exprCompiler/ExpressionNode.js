@@ -37,6 +37,10 @@ export default class ExpressionNode {
             case 'binop_comp_neq':
                 this.left.walk(cb);
                 this.right.walk(cb);
+                return;
+            case 'unary':
+                this.base.walk(cb);
+                return;
         }
     }
 
@@ -75,6 +79,8 @@ export default class ExpressionNode {
             case 'binop_comp_eq':
             case 'binop_comp_neq':
                 return `${this.left}${this.operator}${this.right}`;
+            case 'unary':
+                return `${this.operator}${this.base}`;
         }
     }
 
@@ -128,6 +134,11 @@ export default class ExpressionNode {
                         operator: this.operator,
                         right: this.right.clone()
                     }
+                );
+            case 'unary':
+                return new ExpressionNode(
+                    this.type,
+                    {operator: this.operator, base: this.base.clone()}
                 );
         }
     }
@@ -212,6 +223,13 @@ export default class ExpressionNode {
                     );
                 });
                 return rangeCells;
+            case 'unary':
+                if (this.operator === '-') {
+                    return -1 * this.base.run(sheet);
+                } else {
+                    return this.base.run(sheet);
+                }
+
         }
         if (this.type !== 'function') {
             throw new TypeError('Unknown exression node');

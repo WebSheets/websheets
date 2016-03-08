@@ -162,17 +162,25 @@ export default function parse(expression) {
     function parseUnary() {
         var op = accept('binop_add');
         if (!op) {
-            return parseRange();
+            return parseParen();
         }
         return new ExpressionNode('unary', {
-            operator: op,
-            base: parseSheetRef(),
+            operator: op.value,
+            base: parseParen(),
         });
+    }
+    function parseParen() {
+        if (!accept('lparen')) {
+            return parseFunc();
+        }
+        const output = parseExpression();
+        assert('rparen');
+        return output;
     }
     function parseFunc() {
         const funcName = accept('funcopen');
         if (!funcName) {
-            return parseRange();
+            return parseSheetRef();
         }
         const args = [];
         while (peek()) {
@@ -188,22 +196,14 @@ export default function parse(expression) {
     function parseSheetRef() {
         const sheetref = accept('sheetref');
         if (!sheetref) {
-            return parseFunc();
+            return parseRange();
         }
         return new ExpressionNode('sheetlookup', {
             sheet: sheetref.value,
             content: parseRange(),
         });
     }
-    function parseParen() {
-        if (!accept('lparen')) {
-            return parseSheetRef();
-        }
-        const output = parseExpression();
-        assert('rparen');
-        return output;
-    }
-    function parseExponBinop(lval = parseParen()) {
+    function parseExponBinop(lval = parseUnary()) {
         const peeked = accept('binop_expon');
         if (!peeked) {
             return lval;
@@ -214,7 +214,7 @@ export default function parse(expression) {
                 {
                     left: lval,
                     operator: peeked.value,
-                    right: parseParen(),
+                    right: parseUnary(),
                 }
             )
         );

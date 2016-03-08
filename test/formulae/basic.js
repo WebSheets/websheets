@@ -30,4 +30,25 @@ describe('Formulae', () => {
         assert.equal(compiler('SQRT(A2^5-4*A4)').run(r), 4);
 
     });
+
+
+    const r = new Runner({A1: 1, A2: 2, A4: 4});
+    [
+        ['-2^2', 4],
+        ['-(2^2)', -4],
+        ['1+2+3', 6],
+        ['1+2-3', 0],
+        ['1+2*3', 7],
+        ['1*2+3', 5],
+        ['-a1', -1],
+        ['2^-a2', 0.25],
+    ].forEach(([formula, result]) => {
+        it(`should handle ${formula}`, () => {
+            const compiled = compiler(formula);
+            // console.log(compiled.toString());
+            assert.equal(compiled.run(r), result);
+        });
+    });
+
+
 });
