@@ -40,6 +40,6 @@
   },
   "homepage": "https://github.com/mattbasta/websheets",
   "dependencies": {
-    "formulajs": "^1.0.6"
+    "formulajs": "git://github.com/CrowdProcess/formula.js#master"
   }
 }
