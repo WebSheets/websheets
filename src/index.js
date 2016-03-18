@@ -1,8 +1,13 @@
-import Emitter from './Emitter';
-import {getCellID, getCellPos} from './utils/cellID';
-import parseExpression from './exprCompiler';
+import {
+    Emitter,
+    getCellid,
+    getCellPos,
+    parseExpression,
+    WebSheet as HeadlessWebSheet,
+    WebSheetContext,
+} from 'websheets-core';
+
 import WebSheet from './WebSheet';
-import WebSheetContext from './WebSheetContext';
 
 
 // This is because `export default` exports {default: WebSheet}
@@ -12,8 +17,9 @@ export default WebSheet;
 
 export {
     Emitter,
-    getCellID,
+    getCellid,
     getCellPos,
+    HeadlessWebSheet,
     parseExpression,
     WebSheetContext,
 };

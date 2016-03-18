@@ -1,7 +1,6 @@
 import {DRAG_HANDLE, DRAG_MOVE, DRAG_NONE} from './constants';
-import {getCellID, getCellPos} from './utils/cellID';
+import {getCellID, getCellPos, parseExpression as parse} from 'websheets-core';
 import {listen, unlisten} from './utils/events';
-import parse from './exprCompiler';
 
 
 export function unbindEvents(self) {

@@ -1,6 +1,5 @@
 var path = require('path');
 
-var ExtractTextPlugin = require('extract-text-webpack-plugin');
 var webpack = require('webpack');
 
 
@@ -16,12 +15,11 @@ module.exports = {
         library: 'WebSheet',
     },
     plugins: [
-        new ExtractTextPlugin('style.css'),
-        // new webpack.optimize.UglifyJsPlugin({
-        //     compress: {warnings: false},
-        //     mangle: {},
-        //     sourceMap: false,
-        // }),
+        new webpack.optimize.UglifyJsPlugin({
+            compress: {warnings: false},
+            mangle: {},
+            sourceMap: false,
+        }),
         new webpack.optimize.DedupePlugin(),
     ],
     module: {
@@ -30,9 +28,6 @@ module.exports = {
                 test: /\.jsx?$/,
                 exclude: /node_modules/,
                 loader: 'babel-loader',
-            }, {
-                test: /\.css$/,
-                loader: 'style-loader!css-loader',
             },
         ],
     },
