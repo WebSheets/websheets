@@ -21,22 +21,20 @@
   "main": "index.js",
   "repository": {
     "type": "git",
-    "url": "https://github.com/mattbasta/websheets.git"
+    "url": "https://github.com/websheets/websheets.git"
   },
   "keywords": [
     "spreadsheet",
     "table",
-    "formula",
-    "expression",
     "excel"
   ],
   "author": "Matt Basta <me@mattbasta.com>",
   "license": "MIT",
   "bugs": {
-    "url": "https://github.com/mattbasta/websheets/issues"
+    "url": "https://github.com/websheets/websheets/issues"
   },
-  "homepage": "https://github.com/mattbasta/websheets",
+  "homepage": "https://github.com/websheets/websheets",
   "dependencies": {
-    "websheets-core": "^0.1.3"
+    "websheets-core": "^0.2.0"
   }
 }
