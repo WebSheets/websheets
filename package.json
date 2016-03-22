@@ -35,6 +35,6 @@
   },
   "homepage": "https://github.com/websheets/websheets",
   "dependencies": {
-    "websheets-core": "^0.2.0"
+    "websheets-core": "^0.2.1"
   }
 }
