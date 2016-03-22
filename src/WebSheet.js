@@ -1,5 +1,4 @@
-import WebSheet from 'websheets-core';
-import {Emitter, getCellID, getCellPos, parseExpression} from 'websheets-core';
+import WebSheet, {Emitter, getCellID, getCellPos, parseExpression} from 'websheets-core';
 
 import {DRAG_NONE} from './constants';
 import {initEvents, unbindEvents} from './WebSheet.events';
